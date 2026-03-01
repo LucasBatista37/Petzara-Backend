@@ -21,6 +21,7 @@ exports.getPublicSchedule = async (req, res) => {
             return res.json({
                 name: petshopUser.petshopName || petshopUser.name,
                 phone: petshopUser.phone,
+                theme: petshopUser.theme,
                 // poderíamos retornar logo e outras infos se existisse
             });
         }
@@ -78,6 +79,7 @@ exports.getPublicSchedule = async (req, res) => {
         res.json({
             name: petshopUser.petshopName || petshopUser.name,
             phone: petshopUser.phone,
+            theme: petshopUser.theme,
             date,
             slots
         });

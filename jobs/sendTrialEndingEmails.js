@@ -2,20 +2,21 @@ const cron = require("node-cron");
 const User = require("../models/User");
 const nodemailer = require("nodemailer");
 const { generateTrialEndingEmail } = require("../utils/emailTemplates");
-
-const emailQueue = require("../queues/emailQueue");
+const transporter = require("../utils/mailer");
 
 async function sendTrialEndingEmail(user) {
   const html = generateTrialEndingEmail(user.name);
 
-  await emailQueue.add("trialEndingEmail", {
-    to: user.email,
-    subject: "Seu trial está acabando! Ative sua assinatura",
-    html,
-  }, {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 5000 }
-  });
+  try {
+    await transporter.sendMail({
+      from: `"PetCare" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: "Seu trial está acabando! Ative sua assinatura",
+      html,
+    });
+  } catch (err) {
+    console.error(`[TRIAL EMAIL FAIL] Falha ao enviar para ${user.email}`, err);
+  }
 }
 
 async function checkTrialEndingUsers() {

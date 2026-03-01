@@ -4,7 +4,7 @@ const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const User = require("../models/User");
 const { generateWelcomeEmail } = require("../utils/emailTemplates");
-const emailQueue = require("../queues/emailQueue");
+const transporter = require("../utils/mailer");
 
 webhookRouter.post(
   "/",
@@ -132,11 +132,16 @@ webhookRouter.post(
                 `[WEBHOOK] Enviando e-mail de boas-vindas para: ${user.email}`
               );
 
-              await emailQueue.add("welcomeEmail", {
-                to: user.email,
-                subject: "🎉 Bem-vindo ao PetCare!",
-                html: generateWelcomeEmail(user.name),
-              }, { attempts: 3, backoff: { type: 'exponential', delay: 5000 } });
+              try {
+                await transporter.sendMail({
+                  from: `"PetCare" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+                  to: user.email,
+                  subject: "🎉 Bem-vindo ao PetCare!",
+                  html: generateWelcomeEmail(user.name),
+                });
+              } catch (err) {
+                console.error(`[WEBHOOK EMAIL FAIL] Erro ao enviar email de boas vindas para ${user.email}`, err);
+              }
             }
           } catch (err) {
             console.error(

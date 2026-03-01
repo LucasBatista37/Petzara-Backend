@@ -73,6 +73,10 @@ const userSchema = new mongoose.Schema(
       default: 3,
       min: 1,
     },
+    theme: {
+      type: String,
+      default: "terracotta"
+    },
     permissions: {
       appointments: { type: permissionSchema, default: () => ({}) },
       clients: { type: permissionSchema, default: () => ({}) },

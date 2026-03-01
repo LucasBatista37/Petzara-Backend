@@ -215,6 +215,7 @@ exports.login = async (req, res) => {
         phone: user.phone,
         role: user.role,
         permissions: user.permissions,
+        theme: user.theme,
       },
     });
   } catch (err) {

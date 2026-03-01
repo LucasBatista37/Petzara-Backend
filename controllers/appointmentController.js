@@ -3,7 +3,7 @@ const Appointment = require("../models/Appointment");
 const Service = require("../models/Service");
 const Transaction = require("../models/Transaction");
 const getOwnerId = require("../utils/getOwnerId");
-const { parseISO, isBefore } = require("date-fns");
+const { parseISO } = require("date-fns");
 const User = require("../models/User");
 const { withTransaction } = require("../utils/withTransaction");
 
@@ -68,6 +68,20 @@ exports.createAppointment = async (req, res) => {
         base.price + extras.reduce((acc, e) => acc + (e.price || 0), 0);
 
       const ownerId = getOwnerId(req.user);
+      const responsibleId = responsible || ownerId; // Default to owner if not provided
+
+      // Check for overlapping appointments
+      const overlappingAppointment = await Appointment.findOne({
+        user: ownerId,
+        responsible: responsibleId,
+        date: date,
+        time: time,
+        status: { $ne: "Cancelado" }
+      }).session(session);
+
+      if (overlappingAppointment) {
+        throw new Error("Já existe um agendamento para este profissional neste horário.");
+      }
 
       const appoint = await Appointment.create(
         [
@@ -86,7 +100,7 @@ exports.createAppointment = async (req, res) => {
             status,
             price: total,
             user: ownerId,
-            responsible: responsible || ownerId, // Default to owner if not provided
+            responsible: responsibleId,
           },
         ],
         { session }
@@ -104,17 +118,17 @@ exports.createAppointment = async (req, res) => {
 
       // Auto-create transaction if status is "Finalizado"
       if (status === "Finalizado") {
-          await Transaction.create([{
-              description: `Serviço: ${petName} - ${ownerName}`,
-              amount: total,
-              type: "income",
-              category: "Serviço",
-              date: new Date(),
-              status: "pending", // Pending confirmation
-              paymentMethod: "cash", // Default
-              relatedAppointment: appoint[0]._id,
-              user: ownerId
-          }], { session });
+        await Transaction.create([{
+          description: `Serviço: ${petName} - ${ownerName}`,
+          amount: total,
+          type: "income",
+          category: "Serviço",
+          date: new Date(),
+          status: "pending", // Pending confirmation
+          paymentMethod: "cash", // Default
+          relatedAppointment: appoint[0]._id,
+          user: ownerId
+        }], { session });
       }
 
       return await Appointment.findById(appoint[0]._id)
@@ -142,8 +156,8 @@ exports.getAllAppointments = async (req, res) => {
     const finalSortOrder = req.query.sortOrder
       ? sortOrder
       : defaultSortOrder === "desc"
-      ? -1
-      : 1;
+        ? -1
+        : 1;
 
     const page = Math.max(parseInt(req.query.page) || 1, 1);
     const limit = Math.min(parseInt(req.query.limit) || 10, 100);
@@ -162,10 +176,17 @@ exports.getAllAppointments = async (req, res) => {
     if (filterStatus) match.status = filterStatus;
 
     const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const currentDate = now.getDate();
+
     if (filterScope === "today") {
-      match.date = { $gte: startOfDay(now), $lte: endOfDay(now) };
+      const todayUTC = new Date(Date.UTC(currentYear, currentMonth, currentDate));
+      match.date = todayUTC;
     } else if (filterScope === "next7days") {
-      match.date = { $gte: startOfDay(now), $lte: endOfDay(addDays(now, 7)) };
+      const todayUTC = new Date(Date.UTC(currentYear, currentMonth, currentDate));
+      const next7DaysUTC = new Date(Date.UTC(currentYear, currentMonth, currentDate + 7));
+      match.date = { $gte: todayUTC, $lte: next7DaysUTC };
     }
 
     const results = await Appointment.aggregate([
@@ -232,9 +253,29 @@ exports.updateAppointment = async (req, res) => {
       }
 
       const oldStatus = appointment.status; // Capture old status
-      
+
       // Update fields including responsible
       Object.assign(appointment, req.body);
+
+      // Check for overlapping appointments when date, time or responsible changes
+      if (req.body.date || req.body.time || req.body.responsible) {
+        const checkDate = req.body.date || appointment.date;
+        const checkTime = req.body.time || appointment.time;
+        const checkResponsible = req.body.responsible || appointment.responsible;
+
+        const overlappingAppointment = await Appointment.findOne({
+          _id: { $ne: appointment._id },
+          user: ownerId,
+          responsible: checkResponsible,
+          date: checkDate,
+          time: checkTime,
+          status: { $ne: "Cancelado" } // Assuming we skip checking if the current updated status is Cancelado... wait, we should check if the new status is not Cancelado
+        }).session(session);
+
+        if (overlappingAppointment && appointment.status !== "Cancelado") {
+          throw { status: 409, message: "Já existe um agendamento para este profissional neste horário." };
+        }
+      }
 
       if (req.body.baseService || req.body.extraServices) {
         const base = await Service.findById(appointment.baseService).session(
@@ -265,18 +306,18 @@ exports.updateAppointment = async (req, res) => {
 
       // Auto-create transaction if status changed to "Finalizado"
       if (req.body.status === "Finalizado" && oldStatus !== "Finalizado") {
-          // Transaction model is already required at the top
-          await Transaction.create([{
-              description: `Serviço: ${appointment.petName} - ${appointment.ownerName}`,
-              amount: appointment.price || 0,
-              type: "income",
-              category: "Serviço",
-              date: new Date(),
-              status: "pending", // Pending confirmation
-              paymentMethod: "cash", // Default, user can change on confirmation
-              relatedAppointment: appointment._id,
-              user: ownerId
-          }], { session });
+        // Transaction model is already required at the top
+        await Transaction.create([{
+          description: `Serviço: ${appointment.petName} - ${appointment.ownerName}`,
+          amount: appointment.price || 0,
+          type: "income",
+          category: "Serviço",
+          date: new Date(),
+          status: "pending", // Pending confirmation
+          paymentMethod: "cash", // Default, user can change on confirmation
+          relatedAppointment: appointment._id,
+          user: ownerId
+        }], { session });
       }
 
       return await Appointment.findById(appointment._id)

@@ -2,6 +2,7 @@ require("dotenv").config();
 const app = require("./app");
 const connectDB = require("./config/db");
 const { checkTrialEndingUsers } = require("./jobs/sendTrialEndingEmails");
+require("./workers/emailWorker"); // Initialize BullMQ Worker
 const clientRoutes = require("./routes/clientRoutes");
 const petRoutes = require("./routes/petRoutes");
 const financialRoutes = require("./routes/financialRoutes");

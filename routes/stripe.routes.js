@@ -3,8 +3,15 @@ const router = express.Router();
 const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const User = require("../models/User");
+const rateLimit = require("express-rate-limit");
 
-router.post("/create-checkout-session", async (req, res) => {
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: "Muitas tentativas de checkout. Tente novamente mais tarde.",
+});
+
+router.post("/create-checkout-session", checkoutLimiter, async (req, res) => {
   try {
     const { priceId, customerEmail } = req.body;
     console.log(

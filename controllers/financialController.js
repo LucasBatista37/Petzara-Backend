@@ -15,19 +15,19 @@ exports.createTransaction = async (req, res) => {
 exports.getTransactions = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
-    const { 
-      page = 1, 
-      limit = 10, 
-      search = "", 
-      type, 
-      startDate, 
-      endDate 
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      type,
+      startDate,
+      endDate
     } = req.query;
 
     const query = { user: ownerId };
 
     if (type) query.type = type;
-    
+
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
@@ -59,9 +59,12 @@ exports.getTransactions = async (req, res) => {
 exports.updateTransaction = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
+    // Sanitize: prevent mass-assignment IDOR/ownership vulnerability
+    const { user, _id, createdAt, updatedAt, ...updateData } = req.body;
+
     const transaction = await Transaction.findOneAndUpdate(
       { _id: req.params.id, user: ownerId },
-      req.body,
+      updateData,
       { new: true }
     );
     if (!transaction) return res.status(404).json({ message: "Transação não encontrada." });

@@ -3,24 +3,18 @@ const User = require("../models/User");
 const nodemailer = require("nodemailer");
 const { generateTrialEndingEmail } = require("../utils/emailTemplates");
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === "true", 
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const emailQueue = require("../queues/emailQueue");
 
 async function sendTrialEndingEmail(user) {
   const html = generateTrialEndingEmail(user.name);
 
-  await transporter.sendMail({
-    from: `"PetCare" <${process.env.SMTP_USER}>`,
+  await emailQueue.add("trialEndingEmail", {
     to: user.email,
     subject: "Seu trial está acabando! Ative sua assinatura",
     html,
+  }, {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5000 }
   });
 }
 

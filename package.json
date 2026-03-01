@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "start": "node --require ./instrument.js server.js",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org beyond-cs --project node ./out && sentry-cli sourcemaps upload --org beyond-cs --project node ./out"
   },
@@ -38,6 +38,8 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "supertest": "^7.2.2",
+    "vitest": "^4.0.18"
   }
 }

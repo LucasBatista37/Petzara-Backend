@@ -3,8 +3,8 @@ const webhookRouter = express.Router();
 const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const User = require("../models/User");
-const transporter = require("../utils/mailer");
 const { generateWelcomeEmail } = require("../utils/emailTemplates");
+const emailQueue = require("../queues/emailQueue");
 
 webhookRouter.post(
   "/",
@@ -132,18 +132,17 @@ webhookRouter.post(
                 `[WEBHOOK] Enviando e-mail de boas-vindas para: ${user.email}`
               );
 
-              await transporter.sendMail({
-                from: `"PetCare" <${process.env.EMAIL_USER}>`,
+              await emailQueue.add("welcomeEmail", {
                 to: user.email,
                 subject: "🎉 Bem-vindo ao PetCare!",
                 html: generateWelcomeEmail(user.name),
-              });
+              }, { attempts: 3, backoff: { type: 'exponential', delay: 5000 } });
             }
           } catch (err) {
             console.error(
               `[WEBHOOK] Erro ao atualizar assinatura: ${err.message}`
             );
-            return res.sendStatus(200);
+            return res.status(500).send("Erro interno ao processar assinatura");
           }
           break;
 
@@ -155,8 +154,7 @@ webhookRouter.post(
 
             if (user) {
               console.log(
-                `[WEBHOOK] Trial vai expirar para ${
-                  user.email
+                `[WEBHOOK] Trial vai expirar para ${user.email
                 }, fim em ${new Date(data.trial_end * 1000)}`
               );
 
@@ -167,11 +165,10 @@ webhookRouter.post(
                 html: `
                   <p>Olá ${user.name},</p>
                   <p>Seu período de teste gratuito do <strong>PetCare</strong> vai terminar em <strong>${new Date(
-                    data.trial_end * 1000
-                  ).toLocaleDateString("pt-BR")}</strong>.</p>
+                  data.trial_end * 1000
+                ).toLocaleDateString("pt-BR")}</strong>.</p>
                   <p>Adicione uma forma de pagamento agora para continuar usando sem interrupções.</p>
-                  <a href="${
-                    process.env.FRONTEND_URL
+                  <a href="${process.env.FRONTEND_URL
                   }/billing" style="background:#4f46e5;color:#fff;padding:10px 20px;border-radius:5px;text-decoration:none;">Adicionar Pagamento</a>
                 `,
               });
@@ -233,7 +230,7 @@ webhookRouter.post(
       res.sendStatus(200);
     } catch (err) {
       console.error("[WEBHOOK] Erro inesperado:", err.message);
-      res.sendStatus(200);
+      res.status(500).send("Erro inesperado no servidor");
     }
   }
 );

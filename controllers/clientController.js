@@ -61,9 +61,12 @@ exports.getClientById = async (req, res) => {
 exports.updateClient = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
+    // Sanitize: prevent mass-assignment IDOR/ownership vulnerability
+    const { user, _id, createdAt, updatedAt, ...updateData } = req.body;
+
     const client = await Client.findOneAndUpdate(
       { _id: req.params.id, user: ownerId },
-      req.body,
+      updateData,
       { new: true }
     );
     if (!client) return res.status(404).json({ message: "Cliente não encontrado." });
@@ -97,9 +100,9 @@ exports.getClientHistory = async (req, res) => {
         { ownerPhone: { $regex: client.phone, $options: "i" } }
       ]
     })
-    .sort({ date: -1, time: -1 })
-    .populate("baseService")
-    .limit(20);
+      .sort({ date: -1, time: -1 })
+      .populate("baseService")
+      .limit(20);
 
     res.json(appointments);
   } catch (err) {

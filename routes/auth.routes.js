@@ -31,7 +31,19 @@ const loginLimiter = rateLimit({
   message: "Muitas tentativas de login. Tente novamente mais tarde.",
 });
 
-router.post("/register", validateRegister, register);
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: "Muitas tentativas de cadastro. Tente novamente mais tarde.",
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3,
+  message: "Muitas requisições de senha. Tente novamente mais tarde.",
+});
+
+router.post("/register", registerLimiter, validateRegister, register);
 router.get("/verify-email", verifyEmail);
 router.post("/resend-verification", emailCooldown, resendVerificationEmail);
 router.post("/login", loginLimiter, login);
@@ -46,7 +58,7 @@ router.put(
   validateChangePassword,
   changePassword
 );
-router.post("/forgot-password", validateForgotPassword, forgotPassword);
-router.post("/reset-password", validateResetPassword, resetPassword);
+router.post("/forgot-password", passwordResetLimiter, validateForgotPassword, forgotPassword);
+router.post("/reset-password", passwordResetLimiter, validateResetPassword, resetPassword);
 
 module.exports = router;

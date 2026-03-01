@@ -21,7 +21,7 @@ exports.getAllPets = async (req, res) => {
     if (clientId) query.client = clientId;
     if (species) query.species = species;
     if (size) query.size = size;
-    
+
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
@@ -61,9 +61,12 @@ exports.getPetById = async (req, res) => {
 exports.updatePet = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
+    // Sanitize: prevent mass-assignment IDOR/ownership vulnerability
+    const { user, _id, createdAt, updatedAt, ...updateData } = req.body;
+
     const pet = await Pet.findOneAndUpdate(
       { _id: req.params.id, user: ownerId },
-      req.body,
+      updateData,
       { new: true }
     );
     if (!pet) return res.status(404).json({ message: "Pet não encontrado." });
@@ -94,9 +97,9 @@ exports.getPetHistory = async (req, res) => {
       user: ownerId,
       petName: { $regex: pet.name, $options: "i" } // Match by name for now
     })
-    .sort({ date: -1, time: -1 })
-    .populate("baseService")
-    .limit(20);
+      .sort({ date: -1, time: -1 })
+      .populate("baseService")
+      .limit(20);
 
     res.json(appointments);
   } catch (err) {

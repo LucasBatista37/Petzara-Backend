@@ -6,6 +6,12 @@ exports.createTransaction = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
     const transaction = await Transaction.create({ ...req.body, user: ownerId });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("financial_updated");
+    }
+
     res.status(201).json(transaction);
   } catch (err) {
     res.status(500).json({ message: "Erro ao criar transação." });
@@ -68,6 +74,12 @@ exports.updateTransaction = async (req, res) => {
       { new: true }
     );
     if (!transaction) return res.status(404).json({ message: "Transação não encontrada." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("financial_updated");
+    }
+
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ message: "Erro ao atualizar transação." });
@@ -79,6 +91,12 @@ exports.deleteTransaction = async (req, res) => {
     const ownerId = getOwnerId(req.user);
     const transaction = await Transaction.findOneAndDelete({ _id: req.params.id, user: ownerId });
     if (!transaction) return res.status(404).json({ message: "Transação não encontrada." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("financial_updated");
+    }
+
     res.json({ message: "Transação removida com sucesso." });
   } catch (err) {
     res.status(500).json({ message: "Erro ao remover transação." });

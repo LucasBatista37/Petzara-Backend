@@ -13,6 +13,13 @@ exports.inviteCollaborator = async (req, res) => {
     const { email, department, role, permissions } = req.body;
     const adminId = getOwnerId(req.user);
 
+    const currentUser = await User.findById(req.user.id);
+    if (currentUser && currentUser.email === email) {
+      return res.status(400).json({
+        message: "Você não pode convidar a si mesmo.",
+      });
+    }
+
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -43,6 +50,11 @@ exports.inviteCollaborator = async (req, res) => {
       subject: "Convite para colaborar no PetCare",
       html: generateInviteCollaboratorEmail(inviteUrl),
     });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(adminId.toString()).emit("collaborators_updated");
+    }
 
     res.json({ message: "Convite enviado com sucesso." });
   } catch (err) {
@@ -92,6 +104,11 @@ exports.acceptInvite = async (req, res) => {
     invite.accepted = true;
     invite.acceptedAt = new Date();
     await invite.save();
+
+    const io = req.app.get("io");
+    if (io && invite.owner) {
+      io.to(invite.owner.toString()).emit("collaborators_updated");
+    }
 
     res.json({
       message: "Conta criada com sucesso. Agora você pode fazer login.",
@@ -172,6 +189,11 @@ exports.updateCollaborator = async (req, res) => {
     const updated = collaborator.toObject();
     delete updated.password;
 
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("collaborators_updated");
+    }
+
     res.json({
       message: "Colaborador atualizado com sucesso.",
       collaborator: updated
@@ -195,6 +217,11 @@ exports.deleteCollaborator = async (req, res) => {
       return res.status(404).json({ message: "Colaborador não encontrado." });
     }
 
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("collaborators_updated");
+    }
+
     res.json({ message: "Colaborador excluído com sucesso." });
   } catch (err) {
     console.error("Erro ao excluir colaborador:", err);
@@ -216,6 +243,11 @@ exports.reorderCollaborators = async (req, res) => {
         );
       })
     );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("collaborators_updated");
+    }
 
     res.json({ message: "Ordem atualizada com sucesso." });
   } catch (err) {

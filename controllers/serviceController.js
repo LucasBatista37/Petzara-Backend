@@ -16,6 +16,11 @@ exports.createService = async (req, res) => {
       user: ownerId,
     });
 
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("services_updated");
+    }
+
     res.status(201).json(service);
   } catch (err) {
     console.error(err);
@@ -64,6 +69,12 @@ exports.updateService = async (req, res) => {
     });
 
     const updated = await req.service.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("services_updated");
+    }
+
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -74,6 +85,12 @@ exports.updateService = async (req, res) => {
 exports.deleteService = async (req, res) => {
   try {
     await req.service.deleteOne();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("services_updated");
+    }
+
     res.json({ message: "Serviço excluído com sucesso" });
   } catch (err) {
     console.error(err);
@@ -84,7 +101,7 @@ exports.deleteService = async (req, res) => {
 exports.reorderServices = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
-    const { services } = req.body; 
+    const { services } = req.body;
 
     if (!Array.isArray(services)) {
       return res.status(400).json({ message: "Services must be an array" });
@@ -98,6 +115,11 @@ exports.reorderServices = async (req, res) => {
     );
 
     await Promise.all(updatePromises);
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("services_updated");
+    }
 
     res.json({ message: "Ordem atualizada com sucesso" });
   } catch (err) {

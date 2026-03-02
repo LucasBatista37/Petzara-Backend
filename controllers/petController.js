@@ -6,6 +6,12 @@ exports.createPet = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
     const pet = await Pet.create({ ...req.body, user: ownerId });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("pets_updated");
+    }
+
     res.status(201).json(pet);
   } catch (err) {
     res.status(500).json({ message: "Erro ao criar pet." });
@@ -70,6 +76,12 @@ exports.updatePet = async (req, res) => {
       { new: true }
     );
     if (!pet) return res.status(404).json({ message: "Pet não encontrado." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("pets_updated");
+    }
+
     res.json(pet);
   } catch (err) {
     res.status(500).json({ message: "Erro ao atualizar pet." });
@@ -81,6 +93,12 @@ exports.deletePet = async (req, res) => {
     const ownerId = getOwnerId(req.user);
     const pet = await Pet.findOneAndDelete({ _id: req.params.id, user: ownerId });
     if (!pet) return res.status(404).json({ message: "Pet não encontrado." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("pets_updated");
+    }
+
     res.json({ message: "Pet removido com sucesso." });
   } catch (err) {
     res.status(500).json({ message: "Erro ao remover pet." });
@@ -120,6 +138,11 @@ exports.reorderPets = async (req, res) => {
         );
       })
     );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("pets_updated");
+    }
 
     res.json({ message: "Ordem atualizada com sucesso." });
   } catch (err) {

@@ -6,6 +6,12 @@ exports.createClient = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
     const client = await Client.create({ ...req.body, user: ownerId });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("clients_updated");
+    }
+
     res.status(201).json(client);
   } catch (err) {
     res.status(500).json({ message: "Erro ao criar cliente." });
@@ -70,6 +76,12 @@ exports.updateClient = async (req, res) => {
       { new: true }
     );
     if (!client) return res.status(404).json({ message: "Cliente não encontrado." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("clients_updated");
+    }
+
     res.json(client);
   } catch (err) {
     res.status(500).json({ message: "Erro ao atualizar cliente." });
@@ -81,6 +93,12 @@ exports.deleteClient = async (req, res) => {
     const ownerId = getOwnerId(req.user);
     const client = await Client.findOneAndDelete({ _id: req.params.id, user: ownerId });
     if (!client) return res.status(404).json({ message: "Cliente não encontrado." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("clients_updated");
+    }
+
     res.json({ message: "Cliente removido com sucesso." });
   } catch (err) {
     res.status(500).json({ message: "Erro ao remover cliente." });
@@ -123,6 +141,11 @@ exports.reorderClients = async (req, res) => {
         );
       })
     );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("clients_updated");
+    }
 
     res.json({ message: "Ordem atualizada com sucesso." });
   } catch (err) {

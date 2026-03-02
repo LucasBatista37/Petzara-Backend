@@ -137,6 +137,14 @@ exports.createAppointment = async (req, res) => {
         .session(session);
     });
 
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("appointments_updated");
+      if (req.body.status === "Finalizado") {
+        io.to(getOwnerId(req.user).toString()).emit("financial_updated");
+      }
+    }
+
     res.status(201).json(populated);
   } catch (err) {
     res
@@ -326,6 +334,14 @@ exports.updateAppointment = async (req, res) => {
         .session(session);
     });
 
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("appointments_updated");
+      if (req.body.status === "Finalizado") {
+        io.to(getOwnerId(req.user).toString()).emit("financial_updated");
+      }
+    }
+
     res.json(updated);
   } catch (err) {
     console.error("Erro ao atualizar agendamento:", err);
@@ -354,6 +370,11 @@ exports.deleteAppointment = async (req, res) => {
 
       return { message: "Agendamento excluído com sucesso" };
     });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("appointments_updated");
+    }
 
     return res.json(deleted);
   } catch (err) {

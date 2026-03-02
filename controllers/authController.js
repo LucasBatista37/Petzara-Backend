@@ -216,6 +216,7 @@ exports.login = async (req, res) => {
         role: user.role,
         permissions: user.permissions,
         theme: user.theme,
+        owner: user.owner,
       },
     });
   } catch (err) {

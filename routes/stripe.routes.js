@@ -25,13 +25,14 @@ router.post("/create-checkout-session", checkoutLimiter, async (req, res) => {
     }
 
     if (["active", "trialing"].includes(user.subscription?.status)) {
-      console.warn(
-        `[CHECKOUT] Usuário já possui assinatura ativa: ${user.email}`
-      );
-      return res.status(400).json({
-        error: "Usuário já possui assinatura ativa",
-        subscriptionId: user.subscription.stripeSubscriptionId,
+      console.log(`[CHECKOUT] Usuário em trial/ativo, redirecionando para o Customer Portal: ${user.email}`);
+
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: user.subscription.stripeCustomerId,
+        return_url: `${process.env.CLIENT_URL}/dashboard`,
       });
+
+      return res.json({ url: portalSession.url });
     }
 
     let customerId = user.subscription?.stripeCustomerId;

@@ -3,7 +3,7 @@ const webhookRouter = express.Router();
 const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const User = require("../models/User");
-const { generateWelcomeEmail } = require("../utils/emailTemplates");
+const { generateWelcomeEmail, generateTrialEndedEmail } = require("../utils/emailTemplates");
 const transporter = require("../utils/mailer");
 
 webhookRouter.post(
@@ -141,6 +141,26 @@ webhookRouter.post(
                 });
               } catch (err) {
                 console.error(`[WEBHOOK EMAIL FAIL] Erro ao enviar email de boas vindas para ${user.email}`, err);
+              }
+            } else if (
+              event.type === "customer.subscription.updated" &&
+              event.data.previous_attributes?.status === "trialing" &&
+              ["past_due", "canceled", "incomplete"].includes(subscription.status) &&
+              user
+            ) {
+              console.log(
+                `[WEBHOOK] Período de teste terminou para: ${user.email}`
+              );
+
+              try {
+                await transporter.sendMail({
+                  from: `"PetCare" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+                  to: user.email,
+                  subject: "⚠️ Seu período de teste terminou",
+                  html: generateTrialEndedEmail(user.name),
+                });
+              } catch (err) {
+                console.error(`[WEBHOOK EMAIL FAIL] Erro ao enviar email de fim de trial para ${user.email}`, err);
               }
             }
           } catch (err) {

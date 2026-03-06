@@ -51,6 +51,7 @@ const userSchema = new mongoose.Schema(
       },
       currentPeriodStart: { type: Date, default: null },
       currentPeriodEnd: { type: Date, default: null },
+      trialEnd: { type: Date, default: null },
     },
     appointmentsSortOrder: {
       type: String,

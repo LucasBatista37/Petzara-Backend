@@ -1,4 +1,6 @@
 require("dotenv").config();
+const http = require("http");
+const { Server } = require("socket.io");
 const app = require("./app");
 const connectDB = require("./config/db");
 const { checkTrialEndingUsers } = require("./jobs/sendTrialEndingEmails");
@@ -16,8 +18,40 @@ const PORT = process.env.PORT || 5000;
     app.use("/api/pets", petRoutes);
     app.use("/api/financial", financialRoutes);
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+    const server = http.createServer(app);
+
+    const allowedOrigins = [
+      "http://localhost:5173",
+      "https://pet-shop-agendamento-sistema.vercel.app",
+      "https://www.petcarezone.shop",
+    ];
+
+    const io = new Server(server, {
+      cors: {
+        origin: allowedOrigins,
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        credentials: true
+      }
+    });
+
+    // Make io accessible in controllers
+    app.set("io", io);
+
+    io.on("connection", (socket) => {
+      console.log("🟢 Cliente Socket conectado:", socket.id);
+
+      socket.on("joinRoom", (room) => {
+        socket.join(room);
+        console.log(`🏠 Socket ${socket.id} entrou na sala (ownerId): ${room}`);
+      });
+
+      socket.on("disconnect", () => {
+        console.log("🔴 Cliente Socket desconectado:", socket.id);
+      });
+    });
+
+    server.listen(PORT, () => {
+      console.log(`🚀 Servidor Node.js com Socket.io rodando em http://localhost:${PORT}`);
     });
 
     checkTrialEndingUsers()

@@ -10,8 +10,15 @@ const getOwnerId = require("../utils/getOwnerId");
 
 exports.inviteCollaborator = async (req, res) => {
   try {
-    const { email, department } = req.body;
+    const { email, department, role, permissions } = req.body;
     const adminId = getOwnerId(req.user);
+
+    const currentUser = await User.findById(req.user.id);
+    if (currentUser && currentUser.email === email) {
+      return res.status(400).json({
+        message: "Você não pode convidar a si mesmo.",
+      });
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -30,6 +37,8 @@ exports.inviteCollaborator = async (req, res) => {
       department,
       token,
       expiresAt,
+      role: role && role === "admin" ? "admin" : "collaborator",
+      permissions: permissions || {},
       owner: adminId,
     });
 
@@ -41,6 +50,11 @@ exports.inviteCollaborator = async (req, res) => {
       subject: "Convite para colaborar no PetCare",
       html: generateInviteCollaboratorEmail(inviteUrl),
     });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(adminId.toString()).emit("collaborators_updated");
+    }
 
     res.json({ message: "Convite enviado com sucesso." });
   } catch (err) {
@@ -74,7 +88,8 @@ exports.acceptInvite = async (req, res) => {
       email,
       password,
       department: invite.department,
-      role: "collaborator",
+      role: invite.role || "collaborator",
+      permissions: invite.permissions || {},
       owner: invite.owner,
       isVerified: true,
       pendingInvitation: false,
@@ -89,6 +104,11 @@ exports.acceptInvite = async (req, res) => {
     invite.accepted = true;
     invite.acceptedAt = new Date();
     await invite.save();
+
+    const io = req.app.get("io");
+    if (io && invite.owner) {
+      io.to(invite.owner.toString()).emit("collaborators_updated");
+    }
 
     res.json({
       message: "Conta criada com sucesso. Agora você pode fazer login.",
@@ -140,7 +160,7 @@ exports.getAllCollaborators = async (req, res) => {
 exports.updateCollaborator = async (req, res) => {
   try {
     const { id } = req.params;
-    const { department, phone, role } = req.body;
+    const { department, phone, role, permissions } = req.body;
 
     const collaborator = await User.findOne({
       _id: id,
@@ -156,13 +176,25 @@ exports.updateCollaborator = async (req, res) => {
     if (role !== undefined && (role === "admin" || role === "collaborator")) {
       collaborator.role = role;
     }
+    if (permissions !== undefined) {
+      // Merge permissions instead of just overriding entirely, to support partial updates
+      collaborator.permissions = {
+        ...collaborator.permissions,
+        ...permissions,
+      };
+    }
 
     await collaborator.save();
 
     const updated = collaborator.toObject();
     delete updated.password;
 
-    res.json({ 
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("collaborators_updated");
+    }
+
+    res.json({
       message: "Colaborador atualizado com sucesso.",
       collaborator: updated
     });
@@ -183,6 +215,11 @@ exports.deleteCollaborator = async (req, res) => {
 
     if (!collaborator) {
       return res.status(404).json({ message: "Colaborador não encontrado." });
+    }
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(getOwnerId(req.user).toString()).emit("collaborators_updated");
     }
 
     res.json({ message: "Colaborador excluído com sucesso." });
@@ -206,6 +243,11 @@ exports.reorderCollaborators = async (req, res) => {
         );
       })
     );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("collaborators_updated");
+    }
 
     res.json({ message: "Ordem atualizada com sucesso." });
   } catch (err) {

@@ -3,8 +3,15 @@ const router = express.Router();
 const Stripe = require("stripe");
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const User = require("../models/User");
+const rateLimit = require("express-rate-limit");
 
-router.post("/create-checkout-session", async (req, res) => {
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: "Muitas tentativas de checkout. Tente novamente mais tarde.",
+});
+
+router.post("/create-checkout-session", checkoutLimiter, async (req, res) => {
   try {
     const { priceId, customerEmail } = req.body;
     console.log(
@@ -18,13 +25,14 @@ router.post("/create-checkout-session", async (req, res) => {
     }
 
     if (["active", "trialing"].includes(user.subscription?.status)) {
-      console.warn(
-        `[CHECKOUT] Usuário já possui assinatura ativa: ${user.email}`
-      );
-      return res.status(400).json({
-        error: "Usuário já possui assinatura ativa",
-        subscriptionId: user.subscription.stripeSubscriptionId,
+      console.log(`[CHECKOUT] Usuário em trial/ativo, redirecionando para o Customer Portal: ${user.email}`);
+
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: user.subscription.stripeCustomerId,
+        return_url: `${process.env.CLIENT_URL}/dashboard`,
       });
+
+      return res.json({ url: portalSession.url });
     }
 
     let customerId = user.subscription?.stripeCustomerId;

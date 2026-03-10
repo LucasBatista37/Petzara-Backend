@@ -8,6 +8,8 @@ const inviteSchema = new mongoose.Schema({
   accepted: { type: Boolean, default: false },
   acceptedAt: { type: Date },
   owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  role: { type: String, enum: ["admin", "collaborator"], default: "collaborator" },
+  permissions: { type: mongoose.Schema.Types.Mixed, default: {} },
 });
 
 module.exports = mongoose.model("Invite", inviteSchema);

@@ -61,7 +61,7 @@ exports.register = async (req, res) => {
   }
 
   try {
-    const { name, email, phone, password } = req.body;
+    const { name, petshopName, email, phone, password } = req.body;
 
     if (await User.findOne({ email })) {
       return res.status(409).json({ message: "E-mail já cadastrado" });
@@ -69,6 +69,7 @@ exports.register = async (req, res) => {
 
     const { user, emailToken } = await createUser({
       name,
+      petshopName,
       email,
       phone,
       password,
@@ -82,7 +83,7 @@ exports.register = async (req, res) => {
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: process.env.STRIPE_PRICE_ID }],
-      trial_period_days: 30,
+      trial_period_days: 7,
       payment_behavior: "allow_incomplete",
       expand: ["latest_invoice.payment_intent"],
     });
@@ -115,14 +116,15 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       message:
-        "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Verifique seu e-mail para ativar sua conta.",
+        "Cadastro realizado com sucesso. Você ganhou 7 dias grátis! Verifique seu e-mail para ativar sua conta.",
     });
   } catch (err) {
+    console.error("[Register Error]", err);
     if (err.type === "StripeCardError" || err.type?.includes("Stripe")) {
       return res.status(400).json({ message: "Erro ao processar no Stripe." });
     }
 
-    res.status(500).json({ message: "Erro no servidor." });
+    res.status(500).json({ message: "Erro no servidor.", error: err.message, stack: err.stack });
   }
 };
 
@@ -208,8 +210,13 @@ exports.login = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        petshopName: user.petshopName,
         email: user.email,
         phone: user.phone,
+        role: user.role,
+        permissions: user.permissions,
+        theme: user.theme,
+        owner: user.owner,
       },
     });
   } catch (err) {

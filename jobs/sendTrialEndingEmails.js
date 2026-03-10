@@ -2,26 +2,21 @@ const cron = require("node-cron");
 const User = require("../models/User");
 const nodemailer = require("nodemailer");
 const { generateTrialEndingEmail } = require("../utils/emailTemplates");
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: process.env.SMTP_SECURE === "true", 
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const transporter = require("../utils/mailer");
 
 async function sendTrialEndingEmail(user) {
   const html = generateTrialEndingEmail(user.name);
 
-  await transporter.sendMail({
-    from: `"PetCare" <${process.env.SMTP_USER}>`,
-    to: user.email,
-    subject: "Seu trial está acabando! Ative sua assinatura",
-    html,
-  });
+  try {
+    await transporter.sendMail({
+      from: `"PetCare" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: "Seu trial está acabando! Ative sua assinatura",
+      html,
+    });
+  } catch (err) {
+    console.error(`[TRIAL EMAIL FAIL] Falha ao enviar para ${user.email}`, err);
+  }
 }
 
 async function checkTrialEndingUsers() {

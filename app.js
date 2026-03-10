@@ -12,6 +12,9 @@ const collaboratorRoutes = require("./routes/collaborator");
 const supportRoutes = require("./routes/support.routes.js");
 const stripeRoutes = require("./routes/stripe.routes");
 const stripeWebhook = require("./routes/stripe.webhook");
+const clientRoutes = require("./routes/clientRoutes");
+const petRoutes = require("./routes/petRoutes");
+const financialRoutes = require("./routes/financialRoutes");
 
 const app = express();
 
@@ -54,6 +57,11 @@ app.use("/api/collaborators", collaboratorRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/stripe", stripeRoutes);
 app.use("/api/notifications", require("./routes/notificationRoutes"));
+app.use("/api/clients", clientRoutes);
+app.use("/api/pets", petRoutes);
+app.use("/api/financial", financialRoutes);
+app.use("/api/settings", require("./routes/settings.routes"));
+app.use("/api/public", require("./routes/public.routes"));
 
 app.get("/", (req, res) => {
   res.send("🚀 API do PetShop SaaS está no ar!");

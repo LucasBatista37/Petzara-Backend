@@ -17,4 +17,7 @@ const petSchema = new mongoose.Schema(
   }
 );
 
+petSchema.index({ user: 1, order: 1 });
+petSchema.index({ user: 1, client: 1 });
+
 module.exports = mongoose.model("Pet", petSchema);

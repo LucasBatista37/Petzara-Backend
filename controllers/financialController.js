@@ -6,6 +6,12 @@ exports.createTransaction = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
     const transaction = await Transaction.create({ ...req.body, user: ownerId });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("financial_updated");
+    }
+
     res.status(201).json(transaction);
   } catch (err) {
     res.status(500).json({ message: "Erro ao criar transação." });
@@ -15,19 +21,19 @@ exports.createTransaction = async (req, res) => {
 exports.getTransactions = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
-    const { 
-      page = 1, 
-      limit = 10, 
-      search = "", 
-      type, 
-      startDate, 
-      endDate 
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      type,
+      startDate,
+      endDate
     } = req.query;
 
     const query = { user: ownerId };
 
     if (type) query.type = type;
-    
+
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
@@ -59,12 +65,21 @@ exports.getTransactions = async (req, res) => {
 exports.updateTransaction = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
+    // Sanitize: prevent mass-assignment IDOR/ownership vulnerability
+    const { user, _id, createdAt, updatedAt, ...updateData } = req.body;
+
     const transaction = await Transaction.findOneAndUpdate(
       { _id: req.params.id, user: ownerId },
-      req.body,
+      updateData,
       { new: true }
     );
     if (!transaction) return res.status(404).json({ message: "Transação não encontrada." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("financial_updated");
+    }
+
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ message: "Erro ao atualizar transação." });
@@ -76,6 +91,12 @@ exports.deleteTransaction = async (req, res) => {
     const ownerId = getOwnerId(req.user);
     const transaction = await Transaction.findOneAndDelete({ _id: req.params.id, user: ownerId });
     if (!transaction) return res.status(404).json({ message: "Transação não encontrada." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("financial_updated");
+    }
+
     res.json({ message: "Transação removida com sucesso." });
   } catch (err) {
     res.status(500).json({ message: "Erro ao remover transação." });

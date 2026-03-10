@@ -6,6 +6,12 @@ exports.createPet = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
     const pet = await Pet.create({ ...req.body, user: ownerId });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("pets_updated");
+    }
+
     res.status(201).json(pet);
   } catch (err) {
     res.status(500).json({ message: "Erro ao criar pet." });
@@ -21,7 +27,7 @@ exports.getAllPets = async (req, res) => {
     if (clientId) query.client = clientId;
     if (species) query.species = species;
     if (size) query.size = size;
-    
+
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
@@ -61,12 +67,21 @@ exports.getPetById = async (req, res) => {
 exports.updatePet = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
+    // Sanitize: prevent mass-assignment IDOR/ownership vulnerability
+    const { user, _id, createdAt, updatedAt, ...updateData } = req.body;
+
     const pet = await Pet.findOneAndUpdate(
       { _id: req.params.id, user: ownerId },
-      req.body,
+      updateData,
       { new: true }
     );
     if (!pet) return res.status(404).json({ message: "Pet não encontrado." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("pets_updated");
+    }
+
     res.json(pet);
   } catch (err) {
     res.status(500).json({ message: "Erro ao atualizar pet." });
@@ -78,6 +93,12 @@ exports.deletePet = async (req, res) => {
     const ownerId = getOwnerId(req.user);
     const pet = await Pet.findOneAndDelete({ _id: req.params.id, user: ownerId });
     if (!pet) return res.status(404).json({ message: "Pet não encontrado." });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("pets_updated");
+    }
+
     res.json({ message: "Pet removido com sucesso." });
   } catch (err) {
     res.status(500).json({ message: "Erro ao remover pet." });
@@ -94,9 +115,9 @@ exports.getPetHistory = async (req, res) => {
       user: ownerId,
       petName: { $regex: pet.name, $options: "i" } // Match by name for now
     })
-    .sort({ date: -1, time: -1 })
-    .populate("baseService")
-    .limit(20);
+      .sort({ date: -1, time: -1 })
+      .populate("baseService")
+      .limit(20);
 
     res.json(appointments);
   } catch (err) {
@@ -117,6 +138,11 @@ exports.reorderPets = async (req, res) => {
         );
       })
     );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(ownerId.toString()).emit("pets_updated");
+    }
 
     res.json({ message: "Ordem atualizada com sucesso." });
   } catch (err) {

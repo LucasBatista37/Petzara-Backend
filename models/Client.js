@@ -23,4 +23,7 @@ const clientSchema = new mongoose.Schema(
   }
 );
 
+clientSchema.index({ user: 1, order: 1 });
+clientSchema.index({ user: 1, name: 1 });
+
 module.exports = mongoose.model("Client", clientSchema);

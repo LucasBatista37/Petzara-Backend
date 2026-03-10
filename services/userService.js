@@ -4,6 +4,7 @@ const crypto = require("crypto");
 
 async function createUser({
   name,
+  petshopName,
   email,
   phone,
   password,
@@ -21,10 +22,11 @@ async function createUser({
 
   const now = new Date();
   const freeTrialEnd = new Date();
-  freeTrialEnd.setMonth(freeTrialEnd.getMonth() + 1); 
+  freeTrialEnd.setMonth(freeTrialEnd.getMonth() + 1);
 
   const userData = {
     name,
+    petshopName,
     email,
     phone,
     password: hashedPassword,
@@ -34,7 +36,7 @@ async function createUser({
     isVerified,
     pendingInvitation,
     subscription: {
-      stripeCustomerId: null, 
+      stripeCustomerId: null,
       stripeSubscriptionId: null,
       status: "trialing",
       currentPeriodStart: now,

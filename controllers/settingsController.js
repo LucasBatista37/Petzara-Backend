@@ -4,7 +4,7 @@ const getOwnerId = require("../utils/getOwnerId");
 exports.getSettings = async (req, res) => {
     try {
         const ownerId = getOwnerId(req.user);
-        const user = await User.findById(ownerId).select("name email phone customUrl isUrlActive maxSimultaneousServices petshopName theme");
+        const user = await User.findById(ownerId).select("name email phone customUrl isUrlActive maxSimultaneousServices petshopName theme schedule");
 
         if (!user) {
             return res.status(404).json({ message: "Usuário não encontrado" });
@@ -20,7 +20,7 @@ exports.getSettings = async (req, res) => {
 exports.updateSettings = async (req, res) => {
     try {
         const ownerId = getOwnerId(req.user);
-        const { customUrl, isUrlActive, maxSimultaneousServices, petshopName, theme, validateOnly } = req.body;
+        const { customUrl, isUrlActive, maxSimultaneousServices, petshopName, theme, schedule, validateOnly } = req.body;
 
         // Se estiver enviando um customUrl, valida se não existe outro dono usando ele
         if (customUrl) {
@@ -42,6 +42,9 @@ exports.updateSettings = async (req, res) => {
         const updateFields = { customUrl, isUrlActive, petshopName, theme };
         if (maxSimultaneousServices !== undefined) {
             updateFields.maxSimultaneousServices = Math.max(1, parseInt(maxSimultaneousServices, 10) || 3);
+        }
+        if (schedule !== undefined) {
+            updateFields.schedule = schedule;
         }
 
         const updatedUser = await User.findByIdAndUpdate(

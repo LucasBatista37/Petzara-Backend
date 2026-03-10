@@ -78,6 +78,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "terracotta"
     },
+    schedule: {
+      workDays: { type: [Number], default: [1, 2, 3, 4, 5] }, // 0=Sun, 1=Mon...
+      workHours: {
+        start: { type: String, default: "08:00" },
+        end: { type: String, default: "18:00" }
+      },
+      breaks: [
+        {
+          start: { type: String },
+          end: { type: String }
+        }
+      ],
+      serviceDuration: { type: Number, default: 60 } // minutes
+    },
     permissions: {
       appointments: { type: permissionSchema, default: () => ({}) },
       clients: { type: permissionSchema, default: () => ({}) },

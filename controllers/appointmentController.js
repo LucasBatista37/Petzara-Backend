@@ -262,8 +262,18 @@ exports.updateAppointment = async (req, res) => {
 
       const oldStatus = appointment.status; // Capture old status
 
-      // Update fields including responsible
-      Object.assign(appointment, req.body);
+      // Sanitize: prevent mass-assignment IDOR/ownership vulnerability
+      const allowedUpdates = [
+        "petName", "species", "breed", "notes", "price", "size",
+        "ownerName", "ownerPhone", "baseService", "extraServices",
+        "date", "time", "status", "responsible"
+      ];
+
+      allowedUpdates.forEach(key => {
+        if (req.body[key] !== undefined) {
+          appointment[key] = req.body[key];
+        }
+      });
 
       // Check for overlapping appointments when date, time or responsible changes
       if (req.body.date || req.body.time || req.body.responsible) {

@@ -20,7 +20,7 @@ exports.getSettings = async (req, res) => {
 exports.updateSettings = async (req, res) => {
     try {
         const ownerId = getOwnerId(req.user);
-        const { customUrl, isUrlActive, maxSimultaneousServices, petshopName, theme, schedule, validateOnly } = req.body;
+        const { customUrl, isUrlActive, maxSimultaneousServices, petshopName, theme, schedule, validateOnly, onboardingCompleted } = req.body;
 
         // Se estiver enviando um customUrl, valida se não existe outro dono usando ele
         if (customUrl) {
@@ -45,6 +45,9 @@ exports.updateSettings = async (req, res) => {
         }
         if (schedule !== undefined) {
             updateFields.schedule = schedule;
+        }
+        if (onboardingCompleted !== undefined) {
+            updateFields.onboardingCompleted = onboardingCompleted;
         }
 
         const updatedUser = await User.findByIdAndUpdate(

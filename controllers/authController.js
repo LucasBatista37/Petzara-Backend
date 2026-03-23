@@ -7,6 +7,7 @@ const { validationResult } = require("express-validator");
 const { generateVerificationEmail } = require("../utils/emailTemplates");
 const { createUser } = require("../services/userService");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { OAuth2Client } = require("google-auth-library");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const REFRESH_SECRET = process.env.REFRESH_SECRET;
@@ -14,6 +15,8 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const BASE_URL = process.env.BASE_URL;
 const CLIENT_URL = process.env.CLIENT_URL;
 const NODE_ENV = process.env.NODE_ENV || "development";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 if (!JWT_SECRET) throw new Error("Variável JWT_SECRET não definida");
 if (!EMAIL_USER) throw new Error("Variável EMAIL_USER não definida");
@@ -217,6 +220,7 @@ exports.login = async (req, res) => {
         permissions: user.permissions,
         theme: user.theme,
         owner: user.owner,
+        onboardingCompleted: user.onboardingCompleted,
       },
     });
   } catch (err) {
@@ -409,5 +413,91 @@ exports.logout = async (req, res) => {
   } catch (err) {
     console.error("[Logout] Erro:", err);
     res.status(500).json({ message: "Erro ao sair da conta" });
+  }
+};
+
+exports.googleLogin = async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ message: "Token do Google não informado." });
+    }
+    if (!googleClient) {
+      return res
+        .status(500)
+        .json({ message: "Google OAuth não está configurado no servidor." });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name } = payload;
+
+    // Try to find user by googleId or by email
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      // Link googleId if not set yet
+      if (!user.googleId) {
+        user.googleId = googleId;
+      }
+      // Auto-verify on Google login
+      if (!user.isVerified) {
+        user.isVerified = true;
+      }
+    } else {
+      // Create new user via Google
+      const now = new Date();
+      const freeTrialEnd = new Date();
+      freeTrialEnd.setMonth(freeTrialEnd.getMonth() + 1);
+
+      const customer = await stripe.customers.create({ email, name });
+
+      user = await User.create({
+        name,
+        email,
+        googleId,
+        isVerified: true,
+        role: "admin",
+        subscription: {
+          stripeCustomerId: customer.id,
+          stripeSubscriptionId: null,
+          status: "trialing",
+          currentPeriodStart: now,
+          currentPeriodEnd: freeTrialEnd,
+        },
+      });
+    }
+
+    const accessToken = generateAccessToken(user._id);
+    const refreshTk = generateRefreshToken(user._id);
+    user.refreshToken = refreshTk;
+    await user.save();
+
+    res.cookie("refreshToken", refreshTk, cookieOptions);
+
+    return res.json({
+      accessToken,
+      ...(NODE_ENV !== "production" && { refreshToken: refreshTk }),
+      user: {
+        id: user._id,
+        name: user.name,
+        petshopName: user.petshopName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        permissions: user.permissions,
+        theme: user.theme,
+        owner: user.owner,
+        onboardingCompleted: user.onboardingCompleted,
+      },
+    });
+  } catch (err) {
+    console.error("[Google Login] Erro:", err);
+    return res
+      .status(401)
+      .json({ message: "Falha na autenticação com Google." });
   }
 };

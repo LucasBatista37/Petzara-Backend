@@ -1,4 +1,7 @@
 const Appointment = require("../models/Appointment");
+const Service = require("../models/Service");
+const Client = require("../models/Client");
+const Pet = require("../models/Pet");
 const {
   startOfDay,
   addDays,
@@ -231,5 +234,21 @@ exports.getStats = async (req, res) => {
     res
       .status(500)
       .json({ message: "Erro ao gerar estatísticas do dashboard" });
+  }
+};
+
+exports.getSetupProgress = async (req, res) => {
+  try {
+    const ownerId = getOwnerId(req.user);
+    const [services, clients, pets, appointments] = await Promise.all([
+      Service.countDocuments({ user: ownerId, extra: false }),
+      Client.countDocuments({ user: ownerId }),
+      Pet.countDocuments({ user: ownerId }),
+      Appointment.countDocuments({ user: ownerId }),
+    ]);
+    res.json({ services, clients, pets, appointments });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Erro ao buscar progresso de configuração" });
   }
 };

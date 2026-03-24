@@ -1,6 +1,5 @@
 const cron = require("node-cron");
 const User = require("../models/User");
-const nodemailer = require("nodemailer");
 const { generateTrialEndingEmail } = require("../utils/emailTemplates");
 const transporter = require("../utils/mailer");
 

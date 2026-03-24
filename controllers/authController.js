@@ -4,7 +4,7 @@ const User = require("../models/User");
 const crypto = require("crypto");
 const transporter = require("../utils/mailer");
 const { validationResult } = require("express-validator");
-const { generateVerificationEmail } = require("../utils/emailTemplates");
+const { generateVerificationEmail, generateResetPasswordEmail } = require("../utils/emailTemplates");
 const { createUser } = require("../services/userService");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { OAuth2Client } = require("google-auth-library");
@@ -66,8 +66,29 @@ exports.register = async (req, res) => {
   try {
     const { name, petshopName, email, phone, password } = req.body;
 
-    if (await User.findOne({ email })) {
-      return res.status(409).json({ message: "E-mail já cadastrado" });
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      if (!existingUser.isVerified) {
+        existingUser.emailToken = crypto.randomBytes(32).toString("hex");
+        await existingUser.save();
+
+        const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${existingUser.emailToken}&email=${email}`;
+        try {
+          await transporter.sendMail({
+            from: `"PetCare" <${EMAIL_USER}>`,
+            to: email,
+            subject: "Confirme seu e-mail no PetCare",
+            html: generateVerificationEmail(existingUser.name, verifyUrl),
+          });
+        } catch (emailErr) {
+          console.error("[Register] Falha ao reenviar verificação:", emailErr.message);
+        }
+
+        return res.status(200).json({
+          message: "Esse e-mail já foi cadastrado mas ainda não foi verificado. Reenviamos o e-mail de confirmação.",
+        });
+      }
+      return res.status(409).json({ message: "E-mail já cadastrado." });
     }
 
     const { user, emailToken } = await createUser({
@@ -110,16 +131,24 @@ exports.register = async (req, res) => {
 
     const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${emailToken}&email=${email}`;
 
-    await transporter.sendMail({
-      from: `"PetCare" <${EMAIL_USER}>`,
-      to: email,
-      subject: "Confirme seu e-mail no PetCare",
-      html: generateVerificationEmail(name, verifyUrl),
-    });
+    let emailSent = true;
+    try {
+      await transporter.sendMail({
+        from: `"PetCare" <${EMAIL_USER}>`,
+        to: email,
+        subject: "Confirme seu e-mail no PetCare",
+        html: generateVerificationEmail(name, verifyUrl),
+      });
+    } catch (emailErr) {
+      console.error("[Register] Falha ao enviar e-mail de verificação:", emailErr.message);
+      emailSent = false;
+    }
 
     res.status(201).json({
-      message:
-        "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Verifique seu e-mail para ativar sua conta.",
+      message: emailSent
+        ? "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Verifique seu e-mail para ativar sua conta."
+        : "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Não foi possível enviar o e-mail de verificação. Use a opção 'Reenviar e-mail' para ativá-lo.",
+      emailSent,
     });
   } catch (err) {
     console.error("[Register Error]", err);
@@ -127,7 +156,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "Erro ao processar no Stripe." });
     }
 
-    res.status(500).json({ message: "Erro no servidor.", error: err.message, stack: err.stack });
+    res.status(500).json({ message: "Erro no servidor.", error: err.message });
   }
 };
 

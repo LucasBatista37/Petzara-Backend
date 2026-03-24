@@ -11,6 +11,9 @@
   "author": "",
   "license": "ISC",
   "description": "",
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "@sentry/node": "^7.120.3",
     "axios": "^1.13.6",

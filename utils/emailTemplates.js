@@ -79,7 +79,7 @@ exports.generateWelcomeEmail = (name) => `
 exports.generateTrialEndingEmail = (name) => `
   <div style="font-family: 'Plus Jakarta Sans', Arial, sans-serif; line-height: 1.6; color: ${COLORS.espresso}; background-color: ${COLORS.cream}; padding: 40px; border-radius: 24px; border: 1px solid ${COLORS.sand};">
     <h2 style="color: ${COLORS.terracotta}; font-family: 'Outfit', sans-serif; font-size: 24px; margin-bottom: 20px;">Olá, ${name} 👋</h2>
-    <p style="font-size: 16px;">Seu período de teste de 7 dias no <strong style="color: ${COLORS.terracotta};">PetCare</strong> está quase acabando.</p>
+    <p style="font-size: 16px;">Seu período de teste de 30 dias no <strong style="color: ${COLORS.terracotta};">PetCare</strong> está quase acabando.</p>
     <p style="font-size: 16px;">Para continuar usando sem interrupções e manter seus dados salvos, adicione uma forma de pagamento no link abaixo:</p>
     <p style="text-align: center; margin: 30px 0;">
       <a href="${process.env.CLIENT_URL}/billing" 
@@ -94,7 +94,7 @@ exports.generateTrialEndingEmail = (name) => `
 exports.generateTrialEndedEmail = (name) => `
   <div style="font-family: 'Plus Jakarta Sans', Arial, sans-serif; line-height: 1.6; color: ${COLORS.espresso}; background-color: ${COLORS.cream}; padding: 40px; border-radius: 24px; border: 1px solid ${COLORS.sand};">
     <h2 style="color: ${COLORS.terracotta}; font-family: 'Outfit', sans-serif; font-size: 24px; margin-bottom: 20px;">Olá, ${name} ⚠️</h2>
-    <p style="font-size: 16px;">Seu período de teste de 7 dias no <strong style="color: ${COLORS.terracotta};">PetCare</strong> terminou.</p>
+    <p style="font-size: 16px;">Seu período de teste de 30 dias no <strong style="color: ${COLORS.terracotta};">PetCare</strong> terminou.</p>
     <p style="font-size: 16px;">O seu acesso foi pausado. Para continuar gerenciando seu PetShop, assine nosso plano garantindo o gerenciamento de clientes, agendamentos e seu espaço no mercado:</p>
     <p style="text-align: center; margin: 30px 0;">
       <a href="${process.env.CLIENT_URL}/billing" 

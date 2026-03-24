@@ -143,10 +143,17 @@ exports.getAllCollaborators = async (req, res) => {
       c.isPromotedAdmin = c.role === 'admin';
     });
 
+    // Include the shop owner at the beginning of the list
+    const owner = await User.findById(ownerId).select("-password").lean();
+    if (owner) {
+      owner.isOwner = true;
+      collaborators.unshift(owner);
+    }
+
     res.json({
       collaborators,
       pagination: {
-        totalItems,
+        totalItems: totalItems + 1,
         totalPages,
         currentPage,
         rowsPerPage: parseInt(limit),

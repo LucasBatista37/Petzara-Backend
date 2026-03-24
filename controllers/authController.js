@@ -86,7 +86,7 @@ exports.register = async (req, res) => {
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: process.env.STRIPE_PRICE_ID }],
-      trial_period_days: 7,
+      trial_period_days: 30,
       payment_behavior: "allow_incomplete",
       expand: ["latest_invoice.payment_intent"],
     });
@@ -119,7 +119,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       message:
-        "Cadastro realizado com sucesso. Você ganhou 7 dias grátis! Verifique seu e-mail para ativar sua conta.",
+        "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Verifique seu e-mail para ativar sua conta.",
     });
   } catch (err) {
     console.error("[Register Error]", err);

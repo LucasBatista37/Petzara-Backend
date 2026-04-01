@@ -28,7 +28,7 @@ app.use(cookieParser());
 const allowedOrigins = [
   "http://localhost:5173",
   "https://pet-shop-agendamento-sistema.vercel.app",
-  "https://app.petzara.shop",
+  "https://app.petzara.app",
 ];
 
 app.use(

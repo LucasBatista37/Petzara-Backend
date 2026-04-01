@@ -54,7 +54,7 @@ const cookieOptions = {
   secure: NODE_ENV === "production",
   sameSite: NODE_ENV === "production" ? "None" : "Lax",
   expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-  domain: NODE_ENV === "production" ? ".petzara.shop" : undefined,
+  domain: NODE_ENV === "production" ? ".petzara.app" : undefined,
 };
 
 exports.register = async (req, res) => {
@@ -437,7 +437,7 @@ exports.logout = async (req, res) => {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "Strict",
-      domain: NODE_ENV === "production" ? ".petzara.shop" : undefined,
+      domain: NODE_ENV === "production" ? ".petzara.app" : undefined,
     });
     res.json({ message: "Logout realizado com sucesso." });
   } catch (err) {

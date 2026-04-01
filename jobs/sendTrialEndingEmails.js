@@ -1,6 +1,5 @@
 const cron = require("node-cron");
 const User = require("../models/User");
-const nodemailer = require("nodemailer");
 const { generateTrialEndingEmail } = require("../utils/emailTemplates");
 const transporter = require("../utils/mailer");
 
@@ -9,7 +8,7 @@ async function sendTrialEndingEmail(user) {
 
   try {
     await transporter.sendMail({
-      from: `"PetCare" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+      from: `"Petzara" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
       to: user.email,
       subject: "Seu trial está acabando! Ative sua assinatura",
       html,

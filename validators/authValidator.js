@@ -7,11 +7,7 @@ exports.validateRegister = [
     .trim()
     .escape(),
   body("email").isEmail().withMessage("Email inválido"),
-  body("phone")
-    .notEmpty()
-    .withMessage("Telefone é obrigatório")
-    .trim()
-    .escape(),
+  body("phone").optional({ values: "falsy" }).trim().escape(),
   body("password")
     .isStrongPassword({
       minLength: 8,

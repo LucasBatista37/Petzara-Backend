@@ -4,9 +4,10 @@ const User = require("../models/User");
 const crypto = require("crypto");
 const transporter = require("../utils/mailer");
 const { validationResult } = require("express-validator");
-const { generateVerificationEmail } = require("../utils/emailTemplates");
+const { generateVerificationEmail, generateResetPasswordEmail } = require("../utils/emailTemplates");
 const { createUser } = require("../services/userService");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { OAuth2Client } = require("google-auth-library");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const REFRESH_SECRET = process.env.REFRESH_SECRET;
@@ -14,6 +15,8 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const BASE_URL = process.env.BASE_URL;
 const CLIENT_URL = process.env.CLIENT_URL;
 const NODE_ENV = process.env.NODE_ENV || "development";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 if (!JWT_SECRET) throw new Error("Variável JWT_SECRET não definida");
 if (!EMAIL_USER) throw new Error("Variável EMAIL_USER não definida");
@@ -51,7 +54,7 @@ const cookieOptions = {
   secure: NODE_ENV === "production",
   sameSite: NODE_ENV === "production" ? "None" : "Lax",
   expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-  domain: NODE_ENV === "production" ? ".petcarezone.shop" : undefined,
+  domain: NODE_ENV === "production" ? ".petzara.shop" : undefined,
 };
 
 exports.register = async (req, res) => {
@@ -63,8 +66,29 @@ exports.register = async (req, res) => {
   try {
     const { name, petshopName, email, phone, password } = req.body;
 
-    if (await User.findOne({ email })) {
-      return res.status(409).json({ message: "E-mail já cadastrado" });
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      if (!existingUser.isVerified) {
+        existingUser.emailToken = crypto.randomBytes(32).toString("hex");
+        await existingUser.save();
+
+        const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${existingUser.emailToken}&email=${email}`;
+        try {
+          await transporter.sendMail({
+            from: `"Petzara" <${EMAIL_USER}>`,
+            to: email,
+            subject: "Confirme seu e-mail no Petzara",
+            html: generateVerificationEmail(existingUser.name, verifyUrl),
+          });
+        } catch (emailErr) {
+          console.error("[Register] Falha ao reenviar verificação:", emailErr.message);
+        }
+
+        return res.status(200).json({
+          message: "Esse e-mail já foi cadastrado mas ainda não foi verificado. Reenviamos o e-mail de confirmação.",
+        });
+      }
+      return res.status(409).json({ message: "E-mail já cadastrado." });
     }
 
     const { user, emailToken } = await createUser({
@@ -83,7 +107,7 @@ exports.register = async (req, res) => {
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: process.env.STRIPE_PRICE_ID }],
-      trial_period_days: 7,
+      trial_period_days: 30,
       payment_behavior: "allow_incomplete",
       expand: ["latest_invoice.payment_intent"],
     });
@@ -107,16 +131,24 @@ exports.register = async (req, res) => {
 
     const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${emailToken}&email=${email}`;
 
-    await transporter.sendMail({
-      from: `"PetCare" <${EMAIL_USER}>`,
-      to: email,
-      subject: "Confirme seu e-mail no PetCare",
-      html: generateVerificationEmail(name, verifyUrl),
-    });
+    let emailSent = true;
+    try {
+      await transporter.sendMail({
+        from: `"Petzara" <${EMAIL_USER}>`,
+        to: email,
+        subject: "Confirme seu e-mail no Petzara",
+        html: generateVerificationEmail(name, verifyUrl),
+      });
+    } catch (emailErr) {
+      console.error("[Register] Falha ao enviar e-mail de verificação:", emailErr.message);
+      emailSent = false;
+    }
 
     res.status(201).json({
-      message:
-        "Cadastro realizado com sucesso. Você ganhou 7 dias grátis! Verifique seu e-mail para ativar sua conta.",
+      message: emailSent
+        ? "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Verifique seu e-mail para ativar sua conta."
+        : "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Não foi possível enviar o e-mail de verificação. Use a opção 'Reenviar e-mail' para ativá-lo.",
+      emailSent,
     });
   } catch (err) {
     console.error("[Register Error]", err);
@@ -124,7 +156,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "Erro ao processar no Stripe." });
     }
 
-    res.status(500).json({ message: "Erro no servidor.", error: err.message, stack: err.stack });
+    res.status(500).json({ message: "Erro no servidor.", error: err.message });
   }
 };
 
@@ -167,9 +199,9 @@ exports.resendVerificationEmail = async (req, res) => {
     const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${user.emailToken}&email=${user.email}`;
 
     const mailOptions = {
-      from: `"PetCare" <${EMAIL_USER}>`,
+      from: `"Petzara" <${EMAIL_USER}>`,
       to: email,
-      subject: "Reenvio: Confirme seu e-mail no PetCare",
+      subject: "Reenvio: Confirme seu e-mail no Petzara",
       html: generateVerificationEmail(user.name, verifyUrl),
     };
 
@@ -217,6 +249,8 @@ exports.login = async (req, res) => {
         permissions: user.permissions,
         theme: user.theme,
         owner: user.owner,
+        onboardingCompleted: user.onboardingCompleted,
+        subscription: user.subscription,
       },
     });
   } catch (err) {
@@ -346,9 +380,9 @@ exports.forgotPassword = async (req, res) => {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}&email=${email}`;
 
   await transporter.sendMail({
-    from: `"PetCare" <${process.env.EMAIL_USER}>`,
+    from: `"Petzara" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "Redefinição de senha PetCare",
+    subject: "Redefinição de senha Petzara",
     html: generateResetPasswordEmail(user.name, resetUrl),
   });
 
@@ -403,11 +437,98 @@ exports.logout = async (req, res) => {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "Strict",
-      domain: NODE_ENV === "production" ? ".petcarezone.shop" : undefined,
+      domain: NODE_ENV === "production" ? ".petzara.shop" : undefined,
     });
     res.json({ message: "Logout realizado com sucesso." });
   } catch (err) {
     console.error("[Logout] Erro:", err);
     res.status(500).json({ message: "Erro ao sair da conta" });
+  }
+};
+
+exports.googleLogin = async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ message: "Token do Google não informado." });
+    }
+    if (!googleClient) {
+      return res
+        .status(500)
+        .json({ message: "Google OAuth não está configurado no servidor." });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name } = payload;
+
+    // Try to find user by googleId or by email
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      // Link googleId if not set yet
+      if (!user.googleId) {
+        user.googleId = googleId;
+      }
+      // Auto-verify on Google login
+      if (!user.isVerified) {
+        user.isVerified = true;
+      }
+    } else {
+      // Create new user via Google
+      const now = new Date();
+      const freeTrialEnd = new Date();
+      freeTrialEnd.setMonth(freeTrialEnd.getMonth() + 1);
+
+      const customer = await stripe.customers.create({ email, name });
+
+      user = await User.create({
+        name,
+        email,
+        googleId,
+        isVerified: true,
+        role: "admin",
+        subscription: {
+          stripeCustomerId: customer.id,
+          stripeSubscriptionId: null,
+          status: "trialing",
+          currentPeriodStart: now,
+          currentPeriodEnd: freeTrialEnd,
+        },
+      });
+    }
+
+    const accessToken = generateAccessToken(user._id);
+    const refreshTk = generateRefreshToken(user._id);
+    user.refreshToken = refreshTk;
+    await user.save();
+
+    res.cookie("refreshToken", refreshTk, cookieOptions);
+
+    return res.json({
+      accessToken,
+      ...(NODE_ENV !== "production" && { refreshToken: refreshTk }),
+      user: {
+        id: user._id,
+        name: user.name,
+        petshopName: user.petshopName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        permissions: user.permissions,
+        theme: user.theme,
+        owner: user.owner,
+        onboardingCompleted: user.onboardingCompleted,
+        subscription: user.subscription,
+      },
+    });
+  } catch (err) {
+    console.error("[Google Login] Erro:", err);
+    return res
+      .status(401)
+      .json({ message: "Falha na autenticação com Google." });
   }
 };

@@ -70,16 +70,26 @@ exports.createAppointment = async (req, res) => {
       const ownerId = getOwnerId(req.user);
       const responsibleId = responsible || ownerId; // Default to owner if not provided
 
-      // Check for overlapping appointments
-      const overlappingAppointment = await Appointment.findOne({
+      // Check for overlapping appointments (duration-aware)
+      const [newHH, newMM] = time.split(':').map(Number);
+      const newStart = newHH * 60 + newMM;
+      const newEnd = newStart + (base.duration || 60);
+
+      const sameDayAppts = await Appointment.find({
         user: ownerId,
         responsible: responsibleId,
         date: date,
-        time: time,
         status: { $ne: "Cancelado" }
-      }).session(session);
+      }).populate('baseService', 'duration').session(session);
 
-      if (overlappingAppointment) {
+      const hasOverlap = sameDayAppts.some(appt => {
+        const [h, m] = appt.time.split(':').map(Number);
+        const existStart = h * 60 + m;
+        const existEnd = existStart + (appt.baseService?.duration || 60);
+        return newStart < existEnd && newEnd > existStart;
+      });
+
+      if (hasOverlap) {
         throw new Error("Já existe um agendamento para este profissional neste horário.");
       }
 
@@ -275,22 +285,34 @@ exports.updateAppointment = async (req, res) => {
         }
       });
 
-      // Check for overlapping appointments when date, time or responsible changes
+      // Check for overlapping appointments (duration-aware) when date, time or responsible changes
       if (req.body.date || req.body.time || req.body.responsible) {
         const checkDate = req.body.date || appointment.date;
         const checkTime = req.body.time || appointment.time;
         const checkResponsible = req.body.responsible || appointment.responsible;
 
-        const overlappingAppointment = await Appointment.findOne({
+        // Get the base service to know the duration
+        const baseForOverlap = await Service.findById(appointment.baseService).session(session);
+        const [newHH, newMM] = checkTime.split(':').map(Number);
+        const newStart = newHH * 60 + newMM;
+        const newEnd = newStart + (baseForOverlap?.duration || 60);
+
+        const sameDayAppts = await Appointment.find({
           _id: { $ne: appointment._id },
           user: ownerId,
           responsible: checkResponsible,
           date: checkDate,
-          time: checkTime,
-          status: { $ne: "Cancelado" } // Assuming we skip checking if the current updated status is Cancelado... wait, we should check if the new status is not Cancelado
-        }).session(session);
+          status: { $ne: "Cancelado" }
+        }).populate('baseService', 'duration').session(session);
 
-        if (overlappingAppointment && appointment.status !== "Cancelado") {
+        const hasOverlap = sameDayAppts.some(appt => {
+          const [h, m] = appt.time.split(':').map(Number);
+          const existStart = h * 60 + m;
+          const existEnd = existStart + (appt.baseService?.duration || 60);
+          return newStart < existEnd && newEnd > existStart;
+        });
+
+        if (hasOverlap && appointment.status !== "Cancelado") {
           throw { status: 409, message: "Já existe um agendamento para este profissional neste horário." };
         }
       }

@@ -45,9 +45,9 @@ exports.inviteCollaborator = async (req, res) => {
     const inviteUrl = `${process.env.CLIENT_URL}/aceitar-convite?token=${token}&email=${email}`;
 
     await transporter.sendMail({
-      from: `"PetCare" <${process.env.EMAIL_USER}>`,
+      from: `"Petzara" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Convite para colaborar no PetCare",
+      subject: "Convite para colaborar no Petzara",
       html: generateInviteCollaboratorEmail(inviteUrl),
     });
 
@@ -143,10 +143,17 @@ exports.getAllCollaborators = async (req, res) => {
       c.isPromotedAdmin = c.role === 'admin';
     });
 
+    // Include the shop owner at the beginning of the list
+    const owner = await User.findById(ownerId).select("-password").lean();
+    if (owner) {
+      owner.isOwner = true;
+      collaborators.unshift(owner);
+    }
+
     res.json({
       collaborators,
       pagination: {
-        totalItems,
+        totalItems: totalItems + 1,
         totalPages,
         currentPage,
         rowsPerPage: parseInt(limit),

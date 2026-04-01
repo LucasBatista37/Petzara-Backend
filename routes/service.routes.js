@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middlewares/authMiddleware");
+const subscriptionMiddleware = require("../middlewares/subscriptionMiddleware");
 const serviceMiddleware = require("../middlewares/serviceMiddleware");
 const {
   createService,
@@ -17,6 +18,7 @@ const {
 } = require("../validators/serviceValidator");
 
 router.use(authMiddleware);
+router.use(subscriptionMiddleware);
 
 router.post("/", serviceValidationRules, validateService, createService);
 router.get("/", getAllServices);

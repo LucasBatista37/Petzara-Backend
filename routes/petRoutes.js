@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const petController = require("../controllers/petController");
 const authMiddleware = require("../middlewares/authMiddleware");
+const subscriptionMiddleware = require("../middlewares/subscriptionMiddleware");
 
 router.use(authMiddleware);
+router.use(subscriptionMiddleware);
 
 router.post("/", petController.createPet);
 router.get("/", petController.getAllPets);

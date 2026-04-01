@@ -9,7 +9,7 @@ exports.sendSupportMessage = async (req, res) => {
     }
 
     await transporter.sendMail({
-      from: `"Suporte PetCare" <${process.env.EMAIL_USER}>`,
+      from: `"Suporte Petzara" <${process.env.EMAIL_USER}>`,
       to: process.env.SUPPORT_EMAIL || process.env.EMAIL_USER, 
       subject: `[Suporte] ${subject}`,
       html: `

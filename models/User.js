@@ -25,6 +25,7 @@ const userSchema = new mongoose.Schema(
     emailToken: { type: String },
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },
+    googleId: { type: String, unique: true, sparse: true },
     role: {
       type: String,
       enum: ["admin", "collaborator"],
@@ -77,6 +78,10 @@ const userSchema = new mongoose.Schema(
     theme: {
       type: String,
       default: "terracotta"
+    },
+    onboardingCompleted: {
+      type: Boolean,
+      default: false,
     },
     schedule: {
       workDays: { type: [Number], default: [1, 2, 3, 4, 5] }, // 0=Sun, 1=Mon...

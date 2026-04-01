@@ -134,9 +134,9 @@ webhookRouter.post(
 
               try {
                 await transporter.sendMail({
-                  from: `"PetCare" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+                  from: `"Petzara" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
                   to: user.email,
-                  subject: "🎉 Bem-vindo ao PetCare!",
+                  subject: "🎉 Bem-vindo ao Petzara!",
                   html: generateWelcomeEmail(user.name),
                 });
               } catch (err) {
@@ -154,7 +154,7 @@ webhookRouter.post(
 
               try {
                 await transporter.sendMail({
-                  from: `"PetCare" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
+                  from: `"Petzara" <${process.env.SMTP_USER || process.env.EMAIL_USER}>`,
                   to: user.email,
                   subject: "⚠️ Seu período de teste terminou",
                   html: generateTrialEndedEmail(user.name),
@@ -184,12 +184,12 @@ webhookRouter.post(
               );
 
               await transporter.sendMail({
-                from: `"PetCare" <${process.env.EMAIL_USER}>`,
+                from: `"Petzara" <${process.env.EMAIL_USER}>`,
                 to: user.email,
                 subject: "⏰ Seu período de teste está acabando!",
                 html: `
                   <p>Olá ${user.name},</p>
-                  <p>Seu período de teste gratuito do <strong>PetCare</strong> vai terminar em <strong>${new Date(
+                  <p>Seu período de teste gratuito do <strong>Petzara</strong> vai terminar em <strong>${new Date(
                   data.trial_end * 1000
                 ).toLocaleDateString("pt-BR")}</strong>.</p>
                   <p>Adicione uma forma de pagamento agora para continuar usando sem interrupções.</p>

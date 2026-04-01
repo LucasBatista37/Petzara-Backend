@@ -1,0 +1,9 @@
+node_modules
+.env
+.git
+.gitignore
+.sentryclirc
+.vercel
+.netlify
+scripts
+*.md

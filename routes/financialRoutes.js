@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const financialController = require("../controllers/financialController");
 const authMiddleware = require("../middlewares/authMiddleware");
+const subscriptionMiddleware = require("../middlewares/subscriptionMiddleware");
 
 router.use(authMiddleware);
+router.use(subscriptionMiddleware);
 
 router.post("/", financialController.createTransaction);
 router.get("/", financialController.getTransactions);

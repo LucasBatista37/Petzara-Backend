@@ -7,6 +7,7 @@ const {
 } = require("../validators/collaboratorValidator");
 const { validationResult } = require("express-validator");
 const authMiddleware = require("../middlewares/authMiddleware");
+const subscriptionMiddleware = require("../middlewares/subscriptionMiddleware");
 
 const runValidation = (req, res, next) => {
   const errors = validationResult(req);
@@ -24,6 +25,7 @@ router.post(
 );
 
 router.use(authMiddleware);
+router.use(subscriptionMiddleware);
 
 router.post(
   "/invite",

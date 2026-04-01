@@ -48,9 +48,9 @@ async function test() {
         const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${emailToken}&email=${user.email}`;
 
         await transporter.sendMail({
-            from: `"PetCare" <${EMAIL_USER}>`,
+            from: `"Petzara" <${EMAIL_USER}>`,
             to: user.email,
-            subject: "Confirme seu e-mail no PetCare",
+            subject: "Confirme seu e-mail no Petzara",
             html: generateVerificationEmail(user.name, verifyUrl),
         });
         console.log("Email sent!");

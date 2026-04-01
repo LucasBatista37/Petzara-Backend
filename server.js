@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 5000;
     const allowedOrigins = [
       "http://localhost:5173",
       "https://pet-shop-agendamento-sistema.vercel.app",
-      "https://www.petcarezone.shop",
+      "https://app.petzara.shop",
     ];
 
     const io = new Server(server, {

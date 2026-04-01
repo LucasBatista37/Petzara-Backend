@@ -45,9 +45,9 @@ exports.inviteCollaborator = async (req, res) => {
     const inviteUrl = `${process.env.CLIENT_URL}/aceitar-convite?token=${token}&email=${email}`;
 
     await transporter.sendMail({
-      from: `"PetCare" <${process.env.EMAIL_USER}>`,
+      from: `"Petzara" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Convite para colaborar no PetCare",
+      subject: "Convite para colaborar no Petzara",
       html: generateInviteCollaboratorEmail(inviteUrl),
     });
 

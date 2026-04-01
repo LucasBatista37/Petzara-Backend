@@ -54,7 +54,7 @@ const cookieOptions = {
   secure: NODE_ENV === "production",
   sameSite: NODE_ENV === "production" ? "None" : "Lax",
   expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-  domain: NODE_ENV === "production" ? ".petcarezone.shop" : undefined,
+  domain: NODE_ENV === "production" ? ".petzara.shop" : undefined,
 };
 
 exports.register = async (req, res) => {
@@ -75,9 +75,9 @@ exports.register = async (req, res) => {
         const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${existingUser.emailToken}&email=${email}`;
         try {
           await transporter.sendMail({
-            from: `"PetCare" <${EMAIL_USER}>`,
+            from: `"Petzara" <${EMAIL_USER}>`,
             to: email,
-            subject: "Confirme seu e-mail no PetCare",
+            subject: "Confirme seu e-mail no Petzara",
             html: generateVerificationEmail(existingUser.name, verifyUrl),
           });
         } catch (emailErr) {
@@ -134,9 +134,9 @@ exports.register = async (req, res) => {
     let emailSent = true;
     try {
       await transporter.sendMail({
-        from: `"PetCare" <${EMAIL_USER}>`,
+        from: `"Petzara" <${EMAIL_USER}>`,
         to: email,
-        subject: "Confirme seu e-mail no PetCare",
+        subject: "Confirme seu e-mail no Petzara",
         html: generateVerificationEmail(name, verifyUrl),
       });
     } catch (emailErr) {
@@ -199,9 +199,9 @@ exports.resendVerificationEmail = async (req, res) => {
     const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${user.emailToken}&email=${user.email}`;
 
     const mailOptions = {
-      from: `"PetCare" <${EMAIL_USER}>`,
+      from: `"Petzara" <${EMAIL_USER}>`,
       to: email,
-      subject: "Reenvio: Confirme seu e-mail no PetCare",
+      subject: "Reenvio: Confirme seu e-mail no Petzara",
       html: generateVerificationEmail(user.name, verifyUrl),
     };
 
@@ -250,6 +250,7 @@ exports.login = async (req, res) => {
         theme: user.theme,
         owner: user.owner,
         onboardingCompleted: user.onboardingCompleted,
+        subscription: user.subscription,
       },
     });
   } catch (err) {
@@ -379,9 +380,9 @@ exports.forgotPassword = async (req, res) => {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}&email=${email}`;
 
   await transporter.sendMail({
-    from: `"PetCare" <${process.env.EMAIL_USER}>`,
+    from: `"Petzara" <${process.env.EMAIL_USER}>`,
     to: email,
-    subject: "Redefinição de senha PetCare",
+    subject: "Redefinição de senha Petzara",
     html: generateResetPasswordEmail(user.name, resetUrl),
   });
 
@@ -436,7 +437,7 @@ exports.logout = async (req, res) => {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "Strict",
-      domain: NODE_ENV === "production" ? ".petcarezone.shop" : undefined,
+      domain: NODE_ENV === "production" ? ".petzara.shop" : undefined,
     });
     res.json({ message: "Logout realizado com sucesso." });
   } catch (err) {
@@ -521,6 +522,7 @@ exports.googleLogin = async (req, res) => {
         theme: user.theme,
         owner: user.owner,
         onboardingCompleted: user.onboardingCompleted,
+        subscription: user.subscription,
       },
     });
   } catch (err) {

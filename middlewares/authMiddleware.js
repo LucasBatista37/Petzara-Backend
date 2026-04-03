@@ -1,6 +1,8 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
+const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES || "15m";
+
 module.exports = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -42,7 +44,7 @@ module.exports = async (req, res, next) => {
           const newAccessToken = jwt.sign(
             { userId: user._id },
             process.env.JWT_SECRET,
-            { expiresIn: "15m" }
+            { expiresIn: ACCESS_EXPIRES }
           );
           res.setHeader("x-access-token", newAccessToken);
           req.user = user;

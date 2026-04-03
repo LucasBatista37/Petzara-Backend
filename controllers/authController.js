@@ -43,8 +43,10 @@ const mapStripeStatusToEnum = (subscription) => {
   }
 };
 
+const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES || "15m";
+
 const generateAccessToken = (userId) =>
-  jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
+  jwt.sign({ userId }, JWT_SECRET, { expiresIn: ACCESS_EXPIRES });
 
 const generateRefreshToken = (userId) =>
   jwt.sign({ userId }, REFRESH_SECRET, { expiresIn: "30d" });
@@ -54,7 +56,10 @@ const cookieOptions = {
   secure: NODE_ENV === "production",
   sameSite: NODE_ENV === "production" ? "None" : "Lax",
   expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-  domain: NODE_ENV === "production" ? ".petzara.app" : undefined,
+  domain:
+    NODE_ENV === "production"
+      ? process.env.COOKIE_DOMAIN || ".petzara.app"
+      : undefined,
 };
 
 exports.register = async (req, res) => {

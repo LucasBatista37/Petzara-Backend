@@ -25,10 +25,17 @@ app.use(Sentry.Handlers.tracingHandler());
 app.set("trust proxy", 1);
 app.use(cookieParser());
 
+const extraOrigins = process.env.CORS_EXTRA_ORIGINS
+  ? process.env.CORS_EXTRA_ORIGINS.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  : [];
+
 const allowedOrigins = [
   "http://localhost:5173",
   "https://pet-shop-agendamento-sistema.vercel.app",
   "https://app.petzara.app",
+  ...extraOrigins,
 ];
 
 app.use(

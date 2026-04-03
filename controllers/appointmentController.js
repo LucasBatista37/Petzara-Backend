@@ -1,11 +1,24 @@
-const mongoose = require("mongoose");
 const Appointment = require("../models/Appointment");
 const Service = require("../models/Service");
 const Transaction = require("../models/Transaction");
 const getOwnerId = require("../utils/getOwnerId");
-const { parseISO } = require("date-fns");
 const User = require("../models/User");
 const { withTransaction } = require("../utils/withTransaction");
+
+/** Mesmo dia civil que o input yyyy-MM-dd (armazenamento costuma ser meia-noite UTC). */
+function mongoDateRangeForCalendarDay(dateValue) {
+  if (!dateValue) return null;
+  const s =
+    typeof dateValue === "string"
+      ? dateValue.slice(0, 10)
+      : new Date(dateValue).toISOString().slice(0, 10);
+  const [y, m, d] = s.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return {
+    $gte: new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0)),
+    $lte: new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999)),
+  };
+}
 
 const VALID_STATUSES = ["Pendente", "Confirmado", "Cancelado", "Finalizado"];
 
@@ -57,7 +70,7 @@ exports.createAppointment = async (req, res) => {
 
       const base = await Service.findById(baseService).session(session);
       if (!base) {
-        throw new Error("Serviço base não encontrado.");
+        throw { status: 400, message: "Serviço base não encontrado." };
       }
 
       const extras = await Service.find({
@@ -69,29 +82,6 @@ exports.createAppointment = async (req, res) => {
 
       const ownerId = getOwnerId(req.user);
       const responsibleId = responsible || ownerId; // Default to owner if not provided
-
-      // Check for overlapping appointments (duration-aware)
-      const [newHH, newMM] = time.split(':').map(Number);
-      const newStart = newHH * 60 + newMM;
-      const newEnd = newStart + (base.duration || 60);
-
-      const sameDayAppts = await Appointment.find({
-        user: ownerId,
-        responsible: responsibleId,
-        date: date,
-        status: { $ne: "Cancelado" }
-      }).populate('baseService', 'duration').session(session);
-
-      const hasOverlap = sameDayAppts.some(appt => {
-        const [h, m] = appt.time.split(':').map(Number);
-        const existStart = h * 60 + m;
-        const existEnd = existStart + (appt.baseService?.duration || 60);
-        return newStart < existEnd && newEnd > existStart;
-      });
-
-      if (hasOverlap) {
-        throw new Error("Já existe um agendamento para este profissional neste horário.");
-      }
 
       const appoint = await Appointment.create(
         [
@@ -157,9 +147,12 @@ exports.createAppointment = async (req, res) => {
 
     res.status(201).json(populated);
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: err.message || "Erro ao criar agendamento" });
+    const status = err.status || 500;
+    const message = err.message || "Erro ao criar agendamento";
+    if (status >= 500) {
+      console.error("Erro ao criar agendamento:", err);
+    }
+    res.status(status).json({ message });
   }
 };
 
@@ -183,6 +176,7 @@ exports.getAllAppointments = async (req, res) => {
     const search = req.query.search?.trim() || "";
     const filterStatus = req.query.filterStatus || "";
     const filterScope = req.query.filterScope || "";
+    const filterDate = (req.query.filterDate || "").trim().slice(0, 10);
 
     const match = { user: ownerId };
     if (search) {
@@ -198,7 +192,12 @@ exports.getAllAppointments = async (req, res) => {
     const currentMonth = now.getMonth();
     const currentDate = now.getDate();
 
-    if (filterScope === "today") {
+    const dayRange =
+      /^\d{4}-\d{2}-\d{2}$/.test(filterDate) &&
+      mongoDateRangeForCalendarDay(filterDate);
+    if (dayRange) {
+      match.date = dayRange;
+    } else if (filterScope === "today") {
       const todayUTC = new Date(Date.UTC(currentYear, currentMonth, currentDate));
       match.date = todayUTC;
     } else if (filterScope === "next7days") {
@@ -284,38 +283,6 @@ exports.updateAppointment = async (req, res) => {
           appointment[key] = req.body[key];
         }
       });
-
-      // Check for overlapping appointments (duration-aware) when date, time or responsible changes
-      if (req.body.date || req.body.time || req.body.responsible) {
-        const checkDate = req.body.date || appointment.date;
-        const checkTime = req.body.time || appointment.time;
-        const checkResponsible = req.body.responsible || appointment.responsible;
-
-        // Get the base service to know the duration
-        const baseForOverlap = await Service.findById(appointment.baseService).session(session);
-        const [newHH, newMM] = checkTime.split(':').map(Number);
-        const newStart = newHH * 60 + newMM;
-        const newEnd = newStart + (baseForOverlap?.duration || 60);
-
-        const sameDayAppts = await Appointment.find({
-          _id: { $ne: appointment._id },
-          user: ownerId,
-          responsible: checkResponsible,
-          date: checkDate,
-          status: { $ne: "Cancelado" }
-        }).populate('baseService', 'duration').session(session);
-
-        const hasOverlap = sameDayAppts.some(appt => {
-          const [h, m] = appt.time.split(':').map(Number);
-          const existStart = h * 60 + m;
-          const existEnd = existStart + (appt.baseService?.duration || 60);
-          return newStart < existEnd && newEnd > existStart;
-        });
-
-        if (hasOverlap && appointment.status !== "Cancelado") {
-          throw { status: 409, message: "Já existe um agendamento para este profissional neste horário." };
-        }
-      }
 
       if (req.body.baseService || req.body.extraServices) {
         const base = await Service.findById(appointment.baseService).session(

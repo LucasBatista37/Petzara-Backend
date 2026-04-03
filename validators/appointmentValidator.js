@@ -40,11 +40,14 @@ const appointmentValidationRules = [
     .withMessage("O nome do tutor deve ter no máximo 100 caracteres."),
 
   body("ownerPhone")
-    .optional({ checkFalsy: true }) 
-    .matches(/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/)
-    .withMessage(
-      "O telefone deve estar no formato (11) 99999-1234 ou 11999991234."
-    ),
+    .optional({ checkFalsy: true })
+    .custom((value) => {
+      const digits = String(value).replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 13) return true;
+      throw new Error(
+        "Telefone inválido (use DDD + número, 10 a 13 dígitos)."
+      );
+    }),
 
   body("baseService")
     .notEmpty()
@@ -64,7 +67,7 @@ const appointmentValidationRules = [
   body("date")
     .notEmpty()
     .withMessage("A data é obrigatória.")
-    .isISO8601()
+    .isISO8601({ strict: false })
     .withMessage("A data deve ser uma data válida."),
 
   body("time")
@@ -84,7 +87,13 @@ const appointmentValidationRules = [
 const validateAppointment = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({ message: errors.array()[0].msg });
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[validateAppointment] 400", errors.array());
+    }
+    return res.status(400).json({
+      message: errors.array()[0].msg,
+      errors: errors.array(),
+    });
   }
   next();
 };

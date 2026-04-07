@@ -8,7 +8,8 @@ const clientRoutes = require("./routes/clientRoutes");
 const petRoutes = require("./routes/petRoutes");
 const financialRoutes = require("./routes/financialRoutes");
 
-const PORT = process.env.PORT || 5000;
+// macOS reserva a porta 5000 para o AirPlay Receiver — use PORT no .env (ex.: 5050).
+const PORT = process.env.PORT || 5050;
 
 (async () => {
   try {

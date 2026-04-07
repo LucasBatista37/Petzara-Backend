@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const Stripe = require("stripe");
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const { getStripe } = require("../utils/stripeClient");
 const User = require("../models/User");
 const rateLimit = require("express-rate-limit");
 
@@ -13,6 +12,7 @@ const checkoutLimiter = rateLimit({
 
 router.post("/create-checkout-session", checkoutLimiter, async (req, res) => {
   try {
+    const stripe = getStripe();
     const { priceId, customerEmail } = req.body;
     console.log(
       `[CHECKOUT] Iniciando checkout para: ${customerEmail}, priceId: ${priceId}`

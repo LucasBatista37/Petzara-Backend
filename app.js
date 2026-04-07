@@ -1,3 +1,15 @@
+require("dotenv").config();
+
+if (!process.env.JWT_SECRET?.trim()) {
+  throw new Error("❌ JWT_SECRET não está definido!");
+}
+if (!process.env.STRIPE_SECRET_KEY?.trim()) {
+  throw new Error("❌ STRIPE_SECRET_KEY não está definido!");
+}
+if (!process.env.STRIPE_WEBHOOK_SECRET?.trim()) {
+  throw new Error("❌ STRIPE_WEBHOOK_SECRET não está definido!");
+}
+
 const express = require("express");
 const cors = require("cors");
 const Sentry = require("@sentry/node");
@@ -75,17 +87,5 @@ app.get("/", (req, res) => {
 });
 
 app.use(Sentry.Handlers.errorHandler());
-
-if (!process.env.JWT_SECRET) {
-  throw new Error("❌ JWT_SECRET não está definido!");
-}
-
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("❌ STRIPE_SECRET_KEY não está definido!");
-}
-
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  throw new Error("❌ STRIPE_WEBHOOK_SECRET não está definido!");
-}
 
 module.exports = app;

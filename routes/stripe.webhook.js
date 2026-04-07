@@ -1,7 +1,6 @@
 const express = require("express");
 const webhookRouter = express.Router();
-const Stripe = require("stripe");
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const { getStripe } = require("../utils/stripeClient");
 const User = require("../models/User");
 const { generateWelcomeEmail, generateTrialEndedEmail } = require("../utils/emailTemplates");
 const transporter = require("../utils/mailer");
@@ -10,6 +9,7 @@ webhookRouter.post(
   "/",
   express.raw({ type: "application/json" }),
   async (req, res) => {
+    const stripe = getStripe();
     const sig = req.headers["stripe-signature"];
     let event;
 

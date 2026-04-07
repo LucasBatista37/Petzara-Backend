@@ -6,7 +6,7 @@ const transporter = require("../utils/mailer");
 const { validationResult } = require("express-validator");
 const { generateVerificationEmail, generateResetPasswordEmail } = require("../utils/emailTemplates");
 const { createUser } = require("../services/userService");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { getStripe } = require("../utils/stripeClient");
 const { OAuth2Client } = require("google-auth-library");
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -104,6 +104,7 @@ exports.register = async (req, res) => {
       password,
     });
 
+    const stripe = getStripe();
     const customer = await stripe.customers.create({
       email: user.email,
       name: user.name,
@@ -488,6 +489,7 @@ exports.googleLogin = async (req, res) => {
       const freeTrialEnd = new Date();
       freeTrialEnd.setMonth(freeTrialEnd.getMonth() + 1);
 
+      const stripe = getStripe();
       const customer = await stripe.customers.create({ email, name });
 
       user = await User.create({

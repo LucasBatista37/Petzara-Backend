@@ -2,7 +2,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const { createUser } = require('./services/userService');
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { getStripe } = require("./utils/stripeClient");
 const { generateVerificationEmail } = require("./utils/emailTemplates");
 const transporter = require("./utils/mailer");
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -22,6 +22,7 @@ async function test() {
         });
         console.log("created user locally");
 
+        const stripe = getStripe();
         const customer = await stripe.customers.create({
             email: user.email,
             name: user.name,

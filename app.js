@@ -14,6 +14,8 @@ const express = require("express");
 const cors = require("cors");
 const Sentry = require("@sentry/node");
 const cookieParser = require("cookie-parser");
+const rateLimit = require("express-rate-limit");
+const { randomUUID } = require("crypto");
 
 const authRoutes = require("./routes/auth.routes");
 const serviceRoutes = require("./routes/service.routes");
@@ -30,12 +32,39 @@ const financialRoutes = require("./routes/financialRoutes");
 
 const app = express();
 
-Sentry.init({ dsn: process.env.SENTRY_DSN });
+const tracesSampleRate = Number(
+  process.env.SENTRY_TRACES_SAMPLE_RATE != null &&
+    process.env.SENTRY_TRACES_SAMPLE_RATE !== ""
+    ? process.env.SENTRY_TRACES_SAMPLE_RATE
+    : process.env.NODE_ENV === "production"
+      ? 0.1
+      : 1.0
+);
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  tracesSampleRate,
+});
 app.use(Sentry.Handlers.requestHandler());
 app.use(Sentry.Handlers.tracingHandler());
 
 app.set("trust proxy", 1);
 app.use(cookieParser());
+
+app.use((req, res, next) => {
+  const id = req.headers["x-request-id"] || randomUUID();
+  req.id = id;
+  res.setHeader("X-Request-Id", id);
+  next();
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
 
 const extraOrigins = process.env.CORS_EXTRA_ORIGINS
   ? process.env.CORS_EXTRA_ORIGINS.split(",")
@@ -67,6 +96,26 @@ app.use("/api/stripe/webhook", stripeWebhook);
 
 app.use(express.json());
 
+const globalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_GLOBAL_MAX || 400),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === "/health",
+});
+
+const publicApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_PUBLIC_MAX || 120),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api")) return next();
+  return globalApiLimiter(req, res, next);
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api", indexRoutes);
@@ -80,7 +129,7 @@ app.use("/api/clients", clientRoutes);
 app.use("/api/pets", petRoutes);
 app.use("/api/financial", financialRoutes);
 app.use("/api/settings", require("./routes/settings.routes"));
-app.use("/api/public", require("./routes/public.routes"));
+app.use("/api/public", publicApiLimiter, require("./routes/public.routes"));
 
 app.get("/", (req, res) => {
   res.send("🚀 API do PetShop SaaS está no ar!");

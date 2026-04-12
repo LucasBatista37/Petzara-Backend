@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "app.js",
   "scripts": {
+    "lint:ci": "node --check app.js && node --check server.js && node --check instrument.js && node --check config/db.js",
     "test": "vitest run",
     "start": "node --require ./instrument.js server.js",
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org beyond-cs --project node ./out && sentry-cli sourcemaps upload --org beyond-cs --project node ./out"

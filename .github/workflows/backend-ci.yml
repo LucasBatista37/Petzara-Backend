@@ -1,0 +1,40 @@
+# Petzara-Backend — CI API (sem VITE_* nem Playwright)
+name: Backend CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: install-lint-test-api
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Lint / static validation
+        run: npm run lint:ci
+
+      - name: Test
+        env:
+          JWT_SECRET: test-jwt-secret-at-least-32-characters-long
+          STRIPE_SECRET_KEY: sk_test_ci_dummy_key_32_chars_min
+          STRIPE_WEBHOOK_SECRET: whsec_ci_dummy_secret_value_here
+          NODE_ENV: test
+        run: npm test

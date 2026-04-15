@@ -1,0 +1,14 @@
+# Substitua @LucasBatista37 por usuários ou @org/team do GitHub.
+# GitHub: a última linha que casa com o arquivo vence — fallback primeiro, caminhos mais específicos por último.
+
+* @LucasBatista37
+
+/middlewares/ @LucasBatista37
+/controllers/ @LucasBatista37
+/models/ @LucasBatista37
+/routes/ @LucasBatista37
+/config/ @LucasBatista37
+/app.js @LucasBatista37
+/server.js @LucasBatista37
+/instrument.js @LucasBatista37
+**/stripe* @LucasBatista37

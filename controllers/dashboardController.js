@@ -8,24 +8,13 @@ const {
   format,
   startOfMonth,
   endOfMonth,
+  subDays,
+  addMonths,
+  subMonths,
 } = require("date-fns");
 const getOwnerId = require("../utils/getOwnerId");
 
-const norm = (s) =>
-  (s || "")
-    .toString()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-
-const normalizeStatus = (raw) => {
-  const s = norm(raw);
-  if (s.includes("finaliz") || s.includes("conclu")) return "Concluído";
-  if (s.includes("confirm")) return "Confirmado";
-  if (s.includes("cancel")) return "Cancelado";
-  if (s.includes("pendent") || s.includes("aguard")) return "Pendente";
-  return "Pendente";
-};
+const TZ = process.env.APP_TIMEZONE || "America/Sao_Paulo";
 
 const parseMonthParam = (m) => {
   if (m == null) return null;
@@ -37,6 +26,270 @@ const parseMonthParam = (m) => {
   return null;
 };
 
+/** Match de agendamentos para métricas (sem janela de UI). */
+function buildMetricsMatch(ownerId, monthParam, yearParam) {
+  const base = { user: ownerId };
+  if (monthParam === "all") return base;
+  if (
+    monthParam != null &&
+    yearParam != null &&
+    !Number.isNaN(yearParam)
+  ) {
+    const start = startOfMonth(new Date(yearParam, monthParam, 1));
+    const end = endOfMonth(start);
+    return {
+      ...base,
+      date: {
+        $gte: start,
+        $lt: new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1),
+      },
+    };
+  }
+  const now = new Date();
+  const start = startOfMonth(now);
+  const end = endOfMonth(now);
+  return {
+    ...base,
+    date: {
+      $gte: start,
+      $lt: new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1),
+    },
+  };
+}
+
+/** Janela para lista/calendário no painel (evita carregar histórico inteiro). */
+function buildUiWindowRange(monthParam, yearParam, isAllPeriod, hasMonthFilter) {
+  const now = new Date();
+  if (isAllPeriod) {
+    return {
+      start: startOfDay(subMonths(now, 12)),
+      end: addDays(startOfDay(addMonths(now, 3)), 1),
+    };
+  }
+  if (hasMonthFilter && yearParam != null && monthParam != null) {
+    const startM = startOfMonth(new Date(yearParam, monthParam, 1));
+    const endM = endOfMonth(startM);
+    return {
+      start: startOfDay(subDays(startM, 14)),
+      end: addDays(startOfDay(addDays(endM, 14)), 1),
+    };
+  }
+  const start = startOfMonth(now);
+  const end = endOfMonth(now);
+  return {
+    start: startOfDay(subDays(start, 14)),
+    end: addDays(startOfDay(addDays(end, 14)), 1),
+  };
+}
+
+const statusLabels = ["Concluído", "Confirmado", "Pendente", "Cancelado"];
+
+function displayStatusExpr() {
+  return {
+    $switch: {
+      branches: [
+        { case: { $eq: ["$status", "Finalizado"] }, then: "Concluído" },
+        { case: { $eq: ["$status", "Confirmado"] }, then: "Confirmado" },
+        { case: { $eq: ["$status", "Cancelado"] }, then: "Cancelado" },
+        { case: { $eq: ["$status", "Pendente"] }, then: "Pendente" },
+      ],
+      default: "Pendente",
+    },
+  };
+}
+
+async function aggregateDashboardMetrics(match) {
+  const pipeline = [
+    { $match: match },
+    {
+      $lookup: {
+        from: "services",
+        localField: "baseService",
+        foreignField: "_id",
+        as: "_base",
+        pipeline: [{ $project: { name: 1, price: 1 } }],
+      },
+    },
+    { $unwind: { path: "$_base", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "services",
+        localField: "extraServices",
+        foreignField: "_id",
+        as: "_extras",
+        pipeline: [{ $project: { price: 1 } }],
+      },
+    },
+    {
+      $addFields: {
+        basePrice: { $ifNull: ["$_base.price", 0] },
+        extrasPrice: {
+          $sum: {
+            $map: {
+              input: "$_extras",
+              as: "e",
+              in: { $ifNull: ["$$e.price", 0] },
+            },
+          },
+        },
+      },
+    },
+    {
+      $addFields: {
+        lineTotal: { $add: ["$basePrice", "$extrasPrice"] },
+        baseName: { $ifNull: ["$_base.name", "Desconhecido"] },
+        dispStatus: displayStatusExpr(),
+        hourKey: { $substrBytes: ["$time", 0, 5] },
+      },
+    },
+    {
+      $facet: {
+        totals: [
+          {
+            $group: {
+              _id: null,
+              totalRevenue: { $sum: "$lineTotal" },
+              totalAppointments: { $sum: 1 },
+            },
+          },
+        ],
+        revenueByService: [
+          {
+            $group: {
+              _id: "$baseName",
+              total: { $sum: "$lineTotal" },
+            },
+          },
+          { $project: { _id: 0, service: "$_id", total: 1 } },
+          { $sort: { total: -1 } },
+        ],
+        statusCounts: [
+          { $group: { _id: "$dispStatus", count: { $sum: 1 } } },
+        ],
+        services: [
+          { $group: { _id: "$baseName", count: { $sum: 1 } } },
+          { $project: { _id: 0, service: "$_id", count: 1 } },
+          { $sort: { count: -1 } },
+        ],
+        byHour: [
+          { $group: { _id: "$hourKey", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ],
+      },
+    },
+  ];
+
+  const [row] = await Appointment.aggregate(pipeline).allowDiskUse(true);
+  const totals = row?.totals?.[0] || {};
+  const totalRevenue = totals.totalRevenue || 0;
+  const totalAppointments = totals.totalAppointments || 0;
+
+  const statusMap = Object.fromEntries(statusLabels.map((s) => [s, 0]));
+  (row?.statusCounts || []).forEach((s) => {
+    if (s._id && statusMap[s._id] != null) statusMap[s._id] = s.count;
+  });
+  const statusCounts = statusLabels.map((status) => ({
+    status,
+    count: statusMap[status] || 0,
+  }));
+
+  const revenueByService = row?.revenueByService || [];
+  const services = row?.services || [];
+  const byHour = (row?.byHour || []).map((h) => ({
+    hour: h._id && h._id !== "" ? h._id : "Desconhecido",
+    count: h.count,
+  }));
+  const peakHourData = byHour.reduce(
+    (prev, curr) => (curr.count > prev.count ? curr : prev),
+    { hour: null, count: 0 }
+  );
+  const peakHour = peakHourData.hour;
+
+  return {
+    totalRevenue,
+    totalAppointments,
+    revenueByService,
+    statusCounts,
+    services,
+    byHour,
+    peakHour,
+  };
+}
+
+async function aggregateLast7Days(match, monthParam, yearParam, hasMonthFilter) {
+  const now = new Date();
+  const today = startOfDay(now);
+  let end7 = today;
+  let start7 = addDays(today, -6);
+
+  if (hasMonthFilter && yearParam != null && monthParam != null) {
+    const startM = startOfMonth(new Date(yearParam, monthParam, 1));
+    const endM = endOfMonth(startM);
+    end7 = end7 > endM ? endM : end7;
+    start7 = start7 < startM ? startM : start7;
+  }
+
+  const dayCounts = await Appointment.aggregate([
+    {
+      $match: {
+        ...match,
+        date: { $gte: startOfDay(start7), $lt: addDays(startOfDay(end7), 1) },
+      },
+    },
+    {
+      $addFields: {
+        dayKey: {
+          $dateToString: { format: "%Y-%m-%d", date: "$date", timezone: TZ },
+        },
+      },
+    },
+    { $group: { _id: "$dayKey", count: { $sum: 1 } } },
+  ]);
+
+  const countByKey = new Map(dayCounts.map((d) => [d._id, d.count]));
+  const daysCount = [];
+  const totalDays = 7;
+  for (let i = totalDays - 1; i >= 0; i--) {
+    const d = addDays(end7, -i);
+    const key = format(d, "yyyy-MM-dd");
+    daysCount.push({ date: format(d, "dd/MM"), count: countByKey.get(key) || 0 });
+  }
+  return daysCount;
+}
+
+async function aggregateByDayInMonth(match, yearParam, monthParam) {
+  if (yearParam == null || monthParam == null) return [];
+  const startM = startOfMonth(new Date(yearParam, monthParam, 1));
+  const endM = endOfMonth(startM);
+  const daysInMonth = endM.getDate();
+
+  const rows = await Appointment.aggregate([
+    {
+      $match: {
+        ...match,
+        date: {
+          $gte: startM,
+          $lt: new Date(endM.getFullYear(), endM.getMonth(), endM.getDate() + 1),
+        },
+      },
+    },
+    {
+      $addFields: {
+        dom: {
+          $dayOfMonth: { date: "$date", timezone: TZ },
+        },
+      },
+    },
+    { $group: { _id: "$dom", count: { $sum: 1 } } },
+  ]);
+
+  const byDom = new Map(rows.map((r) => [r._id, r.count]));
+  return Array.from({ length: daysInMonth }, (_, i) => ({
+    day: String(i + 1).padStart(2, "0"),
+    count: byDom.get(i + 1) || 0,
+  }));
+}
+
 exports.getStats = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
@@ -44,190 +297,68 @@ exports.getStats = async (req, res) => {
     const monthParam = parseMonthParam(req.query.month);
     const yearParam = req.query.year ? Number(req.query.year) : null;
 
-    let dateFilter = {};
-    let hasMonthFilter = false;
-    let isAllPeriod = false;
-
-    if (monthParam === "all") {
-      // Novo caso: todo o período (sem filtro de data)
-      isAllPeriod = true;
-    } else if (
+    const isAllPeriod = monthParam === "all";
+    const hasMonthFilter =
       monthParam != null &&
+      monthParam !== "all" &&
       yearParam != null &&
-      !Number.isNaN(yearParam)
-    ) {
-      const start = startOfMonth(new Date(yearParam, monthParam, 1));
-      const end = endOfMonth(start);
-      dateFilter = {
-        date: {
-          $gte: start,
-          $lt: new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1),
-        },
-      };
-      hasMonthFilter = true;
-    }
+      !Number.isNaN(yearParam);
 
-    const baseQuery = { user: ownerId };
-    let metricsSource = [];
+    const match = buildMetricsMatch(ownerId, monthParam, yearParam);
 
-    if (isAllPeriod) {
-      // Busca todos os agendamentos sem filtro de data
-      metricsSource = await Appointment.find(baseQuery)
-        .sort({ date: 1, time: 1 })
-        .populate("baseService")
-        .populate("extraServices");
-    } else if (hasMonthFilter) {
-      metricsSource = await Appointment.find({ ...baseQuery, ...dateFilter })
-        .sort({ date: 1, time: 1 })
-        .populate("baseService")
-        .populate("extraServices");
-    } else {
-      metricsSource = await Appointment.find(baseQuery)
-        .sort({ date: 1, time: 1 })
-        .populate("baseService")
-        .populate("extraServices");
-    }
+    const metrics = await aggregateDashboardMetrics(match);
 
-    // Busca todos os agendamentos para o calendário (sem filtro de mês)
-    const calendarAppointments = await Appointment.find(baseQuery)
-      .sort({ date: 1, time: 1 })
-      .populate("baseService")
-      .populate("extraServices");
-
-    const totalRevenue = metricsSource.reduce((sum, a) => {
-      const extrasPrice =
-        a.extraServices?.reduce((acc, e) => acc + (e.price || 0), 0) || 0;
-      return sum + (a.baseService?.price || 0) + extrasPrice;
-    }, 0);
-
-    const revenueMap = {};
-    metricsSource.forEach((a) => {
-      const baseName = a.baseService?.name || "Desconhecido";
-      const basePrice = a.baseService?.price || 0;
-      const extrasPrice =
-        a.extraServices?.reduce((acc, e) => acc + (e.price || 0), 0) || 0;
-      const total = basePrice + extrasPrice;
-      revenueMap[baseName] = (revenueMap[baseName] || 0) + total;
-    });
-
-    const revenueByService = Object.entries(revenueMap).map(
-      ([service, total]) => ({ service, total })
+    const last7Days = await aggregateLast7Days(
+      match,
+      monthParam,
+      yearParam,
+      hasMonthFilter
     );
-
-    const statusMap = {
-      Concluído: 0,
-      Confirmado: 0,
-      Pendente: 0,
-      Cancelado: 0,
-    };
-    metricsSource.forEach((a) => {
-      statusMap[normalizeStatus(a.status || a.situacao || a.state)] += 1;
-    });
-    const statusCounts = Object.entries(statusMap).map(([status, count]) => ({
-      status,
-      count,
-    }));
-
-    const serviceMap = {};
-    metricsSource.forEach((a) => {
-      const name = a.baseService?.name || "Desconhecido";
-      serviceMap[name] = (serviceMap[name] || 0) + 1;
-    });
-    const services = Object.entries(serviceMap).map(([service, count]) => ({
-      service,
-      count,
-    }));
-
-    const byHourMap = {};
-    metricsSource.forEach((a) => {
-      const hour = a.time?.slice(0, 5) || "Desconhecido";
-      byHourMap[hour] = (byHourMap[hour] || 0) + 1;
-    });
-    const byHour = Object.entries(byHourMap).map(([hour, count]) => ({
-      hour,
-      count,
-    }));
-
-    const peakHourData = byHour.reduce(
-      (prev, curr) => (curr.count > prev.count ? curr : prev),
-      { hour: null, count: 0 }
-    );
-    const peakHour = peakHourData.hour;
-
-    const today = startOfDay(new Date());
-    let end7 = today;
-    let start7 = addDays(today, -6);
-
-    if (hasMonthFilter) {
-      const startM = startOfMonth(new Date(yearParam, monthParam, 1));
-      const endM = endOfMonth(startM);
-      end7 = end7 > endM ? endM : end7;
-      start7 = start7 < startM ? startM : start7;
-    }
-
-    const daysCount = [];
-    const totalDays = 7;
-    for (let i = totalDays - 1; i >= 0; i--) {
-      const d = addDays(end7, -i);
-      const dStart = startOfDay(d);
-      const dEnd = addDays(dStart, 1);
-      const count = metricsSource.filter((a) => {
-        if (!a.date) return false;
-        // MongoDB stores dates as UTC, so we need to compare using UTC components
-        const apptDate = new Date(a.date);
-        
-        // Get UTC components from MongoDB date
-        const apptYear = apptDate.getUTCFullYear();
-        const apptMonth = apptDate.getUTCMonth();
-        const apptDay = apptDate.getUTCDate();
-        
-        // Get local components from our comparison date
-        const targetYear = d.getFullYear();
-        const targetMonth = d.getMonth();
-        const targetDay = d.getDate();
-        
-        return apptYear === targetYear && apptMonth === targetMonth && apptDay === targetDay;
-      }).length;
-      daysCount.push({ date: format(d, "dd/MM"), count });
-    }
-    const last7Days = daysCount;
 
     let byDayInMonth = [];
     if (hasMonthFilter) {
-      const startM = startOfMonth(new Date(yearParam, monthParam, 1));
-      const endM = endOfMonth(startM);
-      const daysInMonth = endM.getDate();
-      const arr = Array.from({ length: daysInMonth }, (_, i) => ({
-        day: String(i + 1).padStart(2, "0"),
-        count: 0,
-      }));
-
-      metricsSource.forEach((a) => {
-        const d = new Date(a.date);
-        if (!Number.isNaN(d)) {
-          const idx = d.getDate() - 1;
-          if (idx >= 0 && idx < daysInMonth) arr[idx].count += 1;
-        }
-      });
-      byDayInMonth = arr;
+      byDayInMonth = await aggregateByDayInMonth(
+        { user: ownerId },
+        yearParam,
+        monthParam
+      );
     }
 
+    const uiRange = buildUiWindowRange(
+      monthParam,
+      yearParam,
+      isAllPeriod,
+      hasMonthFilter
+    );
+
+    const uiAppointments = await Appointment.find({
+      user: ownerId,
+      date: { $gte: uiRange.start, $lt: uiRange.end },
+    })
+      .sort({ date: 1, time: 1 })
+      .populate("baseService", "name price duration")
+      .populate("extraServices", "name price")
+      .lean();
+
+    const calendarAppointments = uiAppointments;
+    const allAppointments = uiAppointments;
+
     res.json({
-      totalRevenue,
-      totalAppointments: metricsSource.length,
-      peakHour,
-      statusCounts,
-      services,
-      revenueByService,
+      totalRevenue: metrics.totalRevenue,
+      totalAppointments: metrics.totalAppointments,
+      peakHour: metrics.peakHour,
+      statusCounts: metrics.statusCounts,
+      services: metrics.services,
+      revenueByService: metrics.revenueByService,
       last7Days,
       byDayInMonth,
-      allAppointments: metricsSource,
+      allAppointments,
       calendarAppointments,
       appliedFilter: isAllPeriod
         ? { all: true }
         : hasMonthFilter
-        ? { month0: monthParam, year: yearParam }
-        : null,
+          ? { month0: monthParam, year: yearParam }
+          : null,
     });
   } catch (err) {
     console.error(err);

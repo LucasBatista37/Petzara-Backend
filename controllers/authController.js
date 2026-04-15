@@ -371,30 +371,35 @@ exports.changePassword = async (req, res) => {
 };
 
 exports.forgotPassword = async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ message: "Email é obrigatório." });
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email é obrigatório." });
 
-  const user = await User.findOne({ email });
-  if (!user)
-    return res.status(404).json({ message: "Usuário não encontrado." });
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ message: "Usuário não encontrado." });
 
-  const token = crypto.randomBytes(20).toString("hex");
-  user.resetPasswordToken = token;
-  user.resetPasswordExpires = Date.now() + 3600000;
-  await user.save();
+    const token = crypto.randomBytes(20).toString("hex");
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = Date.now() + 3600000;
+    await user.save();
 
-  const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}&email=${email}`;
+    const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}&email=${email}`;
 
-  await transporter.sendMail({
-    from: `"Petzara" <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: "Redefinição de senha Petzara",
-    html: generateResetPasswordEmail(user.name, resetUrl),
-  });
+    await transporter.sendMail({
+      from: `"Petzara" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Redefinição de senha Petzara",
+      html: generateResetPasswordEmail(user.name, resetUrl),
+    });
 
-  res.json({
-    message: "Link de redefinição de senha enviado para seu e-mail.",
-  });
+    res.json({
+      message: "Link de redefinição de senha enviado para seu e-mail.",
+    });
+  } catch (err) {
+    console.error("Erro ao enviar email de redefinição:", err.message);
+    res.status(500).json({ message: "Não foi possível enviar o email. Tente novamente mais tarde." });
+  }
 };
 
 exports.resetPassword = async (req, res) => {

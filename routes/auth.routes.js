@@ -49,7 +49,7 @@ router.get("/verify-email", verifyEmail);
 router.post("/resend-verification", emailCooldown, resendVerificationEmail);
 router.post("/login", loginLimiter, login);
 router.post("/google", loginLimiter, googleLogin);
-router.post("/refresh", authMiddleware, refreshToken);
+router.post("/refresh", refreshToken);
 router.post("/logout", authMiddleware, logout);
 router.put("/me", authMiddleware, updateProfile);
 router.delete("/me", authMiddleware, deleteProfile);

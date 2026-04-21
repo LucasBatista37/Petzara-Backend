@@ -4,6 +4,8 @@ const { Server } = require("socket.io");
 const app = require("./app");
 const connectDB = require("./config/db");
 const { checkTrialEndingUsers } = require("./jobs/sendTrialEndingEmails");
+const { startAutoStatusCron, autoUpdateAppointmentStatus } = require("./jobs/autoUpdateAppointmentStatus");
+const Appointment = require("./models/Appointment");
 const clientRoutes = require("./routes/clientRoutes");
 const petRoutes = require("./routes/petRoutes");
 const financialRoutes = require("./routes/financialRoutes");
@@ -37,6 +39,18 @@ const PORT = process.env.PORT || 5050;
 
     // Make io accessible in controllers
     app.set("io", io);
+
+    // Migrate legacy "Confirmado" status → "Pendente" (one-time, safe to run repeatedly)
+    const migrated = await Appointment.updateMany(
+      { status: "Confirmado" },
+      { $set: { status: "Pendente" } }
+    );
+    if (migrated.modifiedCount > 0) {
+      console.log(`[MIGRATION] ${migrated.modifiedCount} agendamento(s) migrados de "Confirmado" → "Pendente"`);
+    }
+
+    startAutoStatusCron(io);
+    autoUpdateAppointmentStatus(io); // Run once immediately on startup
 
     io.on("connection", (socket) => {
       console.log("🟢 Cliente Socket conectado:", socket.id);

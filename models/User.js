@@ -66,6 +66,7 @@ const userSchema = new mongoose.Schema(
       sparse: true,
       trim: true,
     },
+    deletedAt: { type: Date, default: null },
     isUrlActive: {
       type: Boolean,
       default: false,

@@ -20,7 +20,7 @@ function mongoDateRangeForCalendarDay(dateValue) {
   };
 }
 
-const VALID_STATUSES = ["Pendente", "Confirmado", "Cancelado", "Finalizado"];
+const VALID_STATUSES = ["Pendente", "Em Andamento", "Cancelado", "Finalizado"];
 
 function validateAppointmentInput(body) {
   const {

@@ -11,6 +11,7 @@ const petSchema = new mongoose.Schema(
     client: { type: mongoose.Schema.Types.ObjectId, ref: "Client" }, // Optional link to Client
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // Owner
     order: { type: Number, default: 0 },
+    deletedAt: { type: Date, default: null },
   },
   {
     timestamps: true,

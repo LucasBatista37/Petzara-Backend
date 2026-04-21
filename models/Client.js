@@ -17,6 +17,7 @@ const clientSchema = new mongoose.Schema(
     notes: { type: String },
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // Owner
     order: { type: Number, default: 0 },
+    deletedAt: { type: Date, default: null },
   },
   {
     timestamps: true,

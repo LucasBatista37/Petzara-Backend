@@ -177,9 +177,13 @@ exports.verifyEmail = async (req, res) => {
 
     user.emailToken = undefined;
     user.isVerified = true;
+
+    const refreshToken = generateRefreshToken(user._id);
+    user.refreshToken = refreshToken;
     await user.save();
 
-    res.redirect(`${CLIENT_URL}/email-verificado`);
+    res.cookie("refreshToken", refreshToken, cookieOptions);
+    res.redirect(`${CLIENT_URL}/email-verificado?verified=1`);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao verificar e-mail" });
